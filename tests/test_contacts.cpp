@@ -11,7 +11,8 @@ using namespace ncotb;
 namespace {
 
 constexpr Real kH = 1.0 / 240;
-constexpr ContactSolverType kSolvers[] = {ContactSolverType::SequentialImpulses, ContactSolverType::BaraffLcp};
+constexpr ContactSolverType kSolvers[] = {ContactSolverType::SequentialImpulses,
+                                          ContactSolverType::BaraffLcp};
 
 World groundWorld(ContactSolverType solver) {
     World w;
@@ -62,7 +63,7 @@ Real reboundHeight(ContactSolverType solver, Real e, Real h0) {
 
 TEST_CASE("a sphere dropped on the ground comes to rest on it") {
     for (ContactSolverType solver : kSolvers) {
-        CAPTURE(name(solver));
+        INFO(name(solver));
         World w = groundWorld(solver);
         RigidBody& ball = w.addBody(Shape::sphere(0.5), 2);
         ball.restitution = 0;
@@ -78,7 +79,7 @@ TEST_CASE("a sphere dropped on the ground comes to rest on it") {
 
 TEST_CASE("a box resting on its face is held up by m g, shared over 4 points") {
     for (ContactSolverType solver : kSolvers) {
-        CAPTURE(name(solver));
+        INFO(name(solver));
         World w = groundWorld(solver);
         RigidBody& box = w.addBody(Shape::box({0.5, 0.25, 0.4}), 3);
         box.restitution = 0;
@@ -95,7 +96,7 @@ TEST_CASE("a box resting on its face is held up by m g, shared over 4 points") {
 
 TEST_CASE("bounce height is about e^2 times the drop height") {
     for (ContactSolverType solver : kSolvers) {
-        CAPTURE(name(solver));
+        INFO(name(solver));
         CHECK(reboundHeight(solver, 0.5, 1.0) == doctest::Approx(0.25).epsilon(0.08));
         CHECK(reboundHeight(solver, 0.8, 1.0) == doctest::Approx(0.64).epsilon(0.05));
         CHECK(reboundHeight(solver, 0.0, 1.0) < 0.01);
@@ -110,7 +111,7 @@ TEST_CASE("a stack of five boxes stands still (4 substeps)") {
     // tiny tilt left by an unconverged Gauss-Seidel solve makes the stack drift.
     // Substeps shrink that 16x (1.6 cm -> 1 mm in 5 s at 10 iterations).
     for (ContactSolverType solver : kSolvers) {
-        CAPTURE(name(solver));
+        INFO(name(solver));
         World w = groundWorld(solver);
         w.substeps = 4;
         std::vector<RigidBody*> boxes;
@@ -133,7 +134,7 @@ TEST_CASE("a stack of five boxes stands still (4 substeps)") {
 
 TEST_CASE("an elastic head-on collision of equal spheres swaps their velocities") {
     for (ContactSolverType solver : kSolvers) {
-        CAPTURE(name(solver));
+        INFO(name(solver));
         World w;
         w.gravity = {};
         w.solver.settings.type = solver;
@@ -157,7 +158,8 @@ TEST_CASE("Baraff LCP: random positive definite problems satisfy complementarity
     for (int trial = 0; trial < 300; ++trial) {
         const int n = 1 + trial % 12;
         const int rank = trial % 3 == 0 ? std::max(1, n / 2) : n + 2; // every third is singular
-        std::vector<std::vector<Real>> G(static_cast<size_t>(n), std::vector<Real>(static_cast<size_t>(rank)));
+        std::vector<std::vector<Real>> G(static_cast<size_t>(n),
+                                         std::vector<Real>(static_cast<size_t>(rank)));
         for (auto& row : G)
             for (Real& v : row)
                 v = g(rng);
@@ -210,4 +212,83 @@ TEST_CASE("Baraff LCP: the old freeze case (redundant contacts) terminates") {
         REQUIRE_FALSE(w.solver.stats().lcpFailed);
     }
     CHECK(supportForce(w, box) == doctest::Approx(9.81).epsilon(0.01));
+}
+
+TEST_CASE("an overlap is pushed out slowly and does not launch the body") {
+    // Sphere starting 5 cm into the floor, no gravity: it must end up resting on
+    // the surface, not fly away with the push-out velocity.
+    for (ContactSolverType solver : kSolvers) {
+        INFO(name(solver));
+        World w = groundWorld(solver);
+        w.gravity = {};
+        w.substeps = 4;
+        RigidBody& ball = w.addBody(Shape::sphere(0.5), 1);
+        ball.x = {0, 0.45, 0};
+        ball.updateDerived();
+        Real maxSpeed = 0;
+        for (int i = 0; i < 240; ++i) {
+            w.step(kH);
+            maxSpeed = std::max(maxSpeed, length(ball.v()));
+        }
+        CHECK(maxSpeed < 1e-6); // the push-out moves the ball but leaves no velocity
+        CHECK(ball.x.y == doctest::Approx(0.5).epsilon(0.011)); // out to within the 5 mm slop
+    }
+}
+
+TEST_CASE("a stack started 3 cm into itself settles without exploding") {
+    for (ContactSolverType solver : kSolvers) {
+        INFO(name(solver));
+        World w = groundWorld(solver);
+        w.substeps = 4;
+        std::vector<RigidBody*> boxes;
+        for (int i = 0; i < 3; ++i) {
+            RigidBody& b = w.addBody(Shape::box({0.5, 0.5, 0.5}), 1);
+            b.restitution = 0;
+            b.x = {0, 0.47 + 0.97 * i, 0};
+            b.updateDerived();
+            boxes.push_back(&b);
+        }
+        Real maxSpeed = 0;
+        for (int i = 0; i < 240 * 2; ++i) {
+            w.step(kH);
+            for (RigidBody* b : boxes)
+                maxSpeed = std::max(maxSpeed, length(b->v()));
+        }
+        // Sequential impulses' relax pass doesn't fully converge in a coupled
+        // stack, so a little push-out speed remains for a few steps (0.27 m/s
+        // here; it was 8.6 m/s for a single overlapping sphere before the relax
+        // pass). The exact LCP leaves none.
+        CHECK(maxSpeed < 0.5);
+        for (RigidBody* b : boxes)
+            CHECK(length(b->v()) < 1e-3);
+        CHECK(boxes.back()->x.y == doctest::Approx(2.5).epsilon(0.01));
+    }
+}
+
+TEST_CASE("a ball wider than the gap between two walls stays jammed and calm") {
+    // No valid position exists (1 m ball, walls 95 cm apart). The solver can't
+    // fix that, but it must not jitter, launch the ball or hang.
+    for (ContactSolverType solver : kSolvers) {
+        INFO(name(solver));
+        World w;
+        w.gravity = {};
+        w.substeps = 4;
+        w.solver.settings.type = solver;
+        for (int side : {-1, 1}) {
+            RigidBody& wall = w.addBody(Shape::box({0.5, 1, 1}), 0);
+            wall.x = {side * (0.475 + 0.5), 0, 0};
+            wall.updateDerived();
+        }
+        RigidBody& ball = w.addBody(Shape::sphere(0.5), 1);
+        Real maxSpeed = 0;
+        for (int i = 0; i < 240 * 2; ++i) {
+            w.step(kH);
+            maxSpeed = std::max(maxSpeed, length(ball.v()));
+        }
+        CHECK(maxSpeed < 1e-6);
+        // The LCP keeps it centred. Gauss-Seidel solves one wall after the other,
+        // so the last one wins and the ball shifts 2 cm (until that side's overlap
+        // is down to the slop), then stays put.
+        CHECK(length(ball.x) < 0.025);
+    }
 }

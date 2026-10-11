@@ -55,7 +55,7 @@ TEST_CASE("free fall: semi-implicit and explicit Euler drift at m g^2 h / 2") {
 
 TEST_CASE("free fall: Midpoint, Heun and RK4 are exact for a parabola") {
     for (IntegratorType type : {IntegratorType::Midpoint, IntegratorType::Heun, IntegratorType::RK4}) {
-        CAPTURE(name(type));
+        INFO(name(type));
         CHECK(std::abs(freeFallEnergyChange(type, 1.0 / 240, 2.0)) < 1e-9);
     }
 }
@@ -81,7 +81,7 @@ TEST_CASE("convergence order on a tumbling box") {
 
 TEST_CASE("torque-free tumbling conserves |L| for every integrator") {
     for (IntegratorType type : kAllIntegrators) {
-        CAPTURE(name(type));
+        INFO(name(type));
         World world = tumblingBox(type);
         Vec3 L0 = world.bodies().front()->L;
         for (int i = 0; i < 240 * 10; ++i)

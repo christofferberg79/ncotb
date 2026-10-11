@@ -62,13 +62,19 @@ void World::stepSemiImplicitEuler(Real h) {
         detectCollisions();
         if (resolveContacts) {
             warmStartFromCache();
-            solver.solve(contacts_, hs);
-            updateCache();
+            solver.prepare(contacts_, hs);
+            solver.solveVelocities();
         }
 
-        // ... then move the bodies with the new velocities.
+        // ... then move the bodies with the new velocities ...
         for (auto& body : bodies_)
             if (!body->isStatic()) integratePosition(*body, hs);
+
+        // ... and remove the push-out velocity again, then bounce.
+        if (resolveContacts) {
+            solver.relax();
+            updateCache();
+        }
     }
 }
 

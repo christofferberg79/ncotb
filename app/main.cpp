@@ -164,23 +164,27 @@ const std::vector<Scene>& scenes() {
          }},
         {"Collision test (move bodies in the panel)", true,
          [](World& w) {
+             // Bodies start just touching: overlapping starts have no clean
+             // answer (see docs/notes.md) and are best avoided.
              w.gravity = {};
              w.addBody(Shape::plane(), 0); // ground
              RigidBody& ramp = w.addBody(Shape::plane(), 0);
              ramp.x = {6, 0, 0};
              ramp.q = Quat::fromAxisAngle({0, 0, 1}, 0.5);
-             RigidBody& block = w.addBody(Shape::box({1, 0.5, 1}), 0);
-             block.x = {-3, 0.5, 0};
-             RigidBody& b = w.addBody(Shape::box({0.5, 0.5, 0.5}), 1);
-             b.x = {-3, 1.45, 0.3};
-             b.q = Quat::fromAxisAngle({0, 1, 0}, 0.4);
-             RigidBody& s = w.addBody(Shape::sphere(0.5), 1);
-             s.x = {0, 0.45, 0};
-             RigidBody& b2 = w.addBody(Shape::box({0.4, 0.3, 0.6}), 1);
-             b2.x = {1.4, 0.6, 0};
-             b2.q = Quat::fromAxisAngle({1, 0, 1}, 0.6);
-             for (auto& body : w.bodies())
-                 body->updateDerived();
+             ramp.updateDerived();
+             place(w, Shape::box({1, 0.5, 1}), 0, {-3, 0.5, 0});
+             place(w, Shape::box({0.5, 0.5, 0.5}), 1, {-3, 1.5, 0.3}, Quat::fromAxisAngle({0, 1, 0}, 0.4));
+             place(w, Shape::sphere(0.5), 1, {0, 0.5, 0});
+             // Tilted box with its lowest corner on the ground.
+             RigidBody& b2 =
+                 place(w, Shape::box({0.4, 0.3, 0.6}), 1, {1.4, 0, 0}, Quat::fromAxisAngle({1, 0, 1}, 0.6));
+             Real lowest = 0;
+             for (int k = 0; k < 8; ++k) {
+                 Vec3 c{k & 1 ? 0.4 : -0.4, k & 2 ? 0.3 : -0.3, k & 4 ? 0.6 : -0.6};
+                 lowest = std::min(lowest, (b2.R() * c).y);
+             }
+             b2.x.y = -lowest;
+             b2.updateDerived();
          }},
         {"Balls and boxes", true,
          [](World& w) {
@@ -397,6 +401,10 @@ struct App {
         float beta = float(cs.baumgarte), slopMm = float(cs.slop * 1000);
         if (ImGui::SliderFloat("Baumgarte", &beta, 0, 1)) cs.baumgarte = beta;
         if (ImGui::SliderFloat("Slop (mm)", &slopMm, 0, 20)) cs.slop = slopMm / 1000;
+        float maxPush = float(cs.maxPushVelocity);
+        if (ImGui::SliderFloat("Max push (m/s)", &maxPush, 0.1f, 10, "%.1f", ImGuiSliderFlags_Logarithmic))
+            cs.maxPushVelocity = maxPush;
+        ImGui::Checkbox("Relax (remove push-out velocity)", &cs.relax);
         ImGui::Checkbox("Resolve contacts", &world.resolveContacts);
         const ContactSolverStats& st = world.solver.stats();
         if (cs.type == ContactSolverType::BaraffLcp)

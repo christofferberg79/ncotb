@@ -117,7 +117,8 @@ Two solvers find the impulses λ:
 
 The target velocity:
 - **touching** (0 ≤ depth ≤ slop): 0
-- **penetrating** beyond the slop: Baumgarte push-out, β/h · (depth − slop), β = 0.2
+- **penetrating** beyond the slop: Baumgarte push-out, β/h · (depth − slop), β = 0.2,
+  capped at 1 m/s
 - **apart but within the margin** (depth < 0): depth/h, so the body may close the gap but not
   pass it ("speculative contacts", which prevent overshoot and jitter)
 - **restitution**: a second pass, only on rows that got an impulse while approaching faster
@@ -134,9 +135,35 @@ Drift after 5 s:
 
 | Iterations × substeps | 10 × 1 | 40 × 1 | 10 × 4 | 80 × 1 |
 |---|---|---|---|---|
-| top box drift | 16 mm | 1.5 mm | 1.0 mm | 0.03 mm |
+| top box drift | 12 mm | 1.4 mm | 0.7 mm | 0.03 mm |
 
 The exact LCP solver doesn't drift at all. The app uses 4 substeps in contact scenes.
+
+### Push-out without launching (soft step)
+
+Plain Baumgarte gives overlapping bodies a separation *velocity*, and that velocity stays
+after the overlap is gone. A sphere started 5 cm into the floor flew off at 8.6 m/s with
+4 substeps, because the push-out scales with 1/h. Now each (sub)step has three phases, as
+in Box2D v3's "soft step":
+
+1. solve the velocities *with* the push-out (capped at 1 m/s)
+2. move the bodies, which removes some overlap
+3. **relax**: solve again at the new positions *without* the push-out (target 0, or gap/h
+   for contacts still apart), then the restitution pass
+
+The push-out now moves bodies but leaves no velocity behind. The same sphere leaves the floor
+at 0 m/s, rising 4.2 mm per step until it rests on the surface. During relax the contact
+offsets r_a, r_b move with the bodies, and the depth is updated by how far the bodies moved.
+
+**Overlapping starts are still best avoided.** Some have no valid answer at all. For
+example, a 1 m ball between walls 95 cm apart (tested):
+- The exact LCP keeps the ball centred.
+- Sequential impulses solve one wall after the other, so the last one wins and the ball
+  shifts 2 cm (until that side's overlap is down to the slop).
+
+Both stay calm, with no jitter or launch. A stack started 3 cm into itself settles at the
+right heights. With sequential impulses a little push-out speed (≤ 0.3 m/s) survives a
+few steps, because 10 relax iterations don't fully converge in a coupled stack.
 
 **Known limitations:** no friction yet, so spheres roll and slide forever; no continuous
 collision detection, so a fast body can pass through a thin box.

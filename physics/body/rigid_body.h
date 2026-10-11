@@ -41,9 +41,11 @@ public:
 
     /// Apply impulse J at world-space point p: P += J, L += (p - x) x J. Updates v
     /// and omega directly (I^-1 is unchanged, so this matches updateDerived()).
-    void applyImpulse(const Vec3& J, const Vec3& p) {
+    void applyImpulse(const Vec3& J, const Vec3& p) { applyImpulseAtOffset(J, p - x); }
+    /// Same, with the point given relative to the centre of mass (r = p - x).
+    void applyImpulseAtOffset(const Vec3& J, const Vec3& r) {
         if (isStatic()) return;
-        Vec3 dL = cross(p - x, J);
+        Vec3 dL = cross(r, J);
         P += J;
         L += dL;
         v_ += J * invMass_;
