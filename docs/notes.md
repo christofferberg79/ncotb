@@ -57,3 +57,30 @@ velocity update and the position update, so a resting box gets v = 0 *before* it
 also symplectic, so for springs and pendulums the energy error oscillates instead of drifting.
 The modern way to gain accuracy with contacts is substepping. How the selector behaves in
 contact scenes will be decided at milestone 3.
+
+## Collision detection (milestone 2)
+
+`physics/collision/collide.*`. A `ContactManifold` holds one unit normal, pointing from
+body b towards body a (Baraff's convention), and up to 4 points. Each point sits midway
+between the two surfaces and has a penetration depth, which is negative when the shapes are
+apart but closer than the margin. `World::detectCollisions()` checks every pair brute force
+and keeps the dynamic body as a, so normals point away from static geometry.
+
+| Pair          | Method |
+|---------------|--------|
+| sphere–sphere | centre distance |
+| sphere–plane  | centre height above the plane |
+| sphere–box    | closest point on the box, in box coordinates; centre inside → nearest face |
+| box–plane     | the 8 corners below the plane, reduced to 4 |
+| box–box       | separating axis test over the 15 axes (3 + 3 faces, 9 edge×edge) |
+
+Box–box picks the axis with the least penetration. Face axes are preferred unless an edge
+axis is clearly better (`s > 0.95·s_face + 0.005`), so the contact type doesn't flicker
+between steps. For a face contact the most anti-parallel face of the other box is clipped
+against the reference face's 4 side planes (Sutherland–Hodgman), and the points below the
+reference face are kept. An edge–edge contact gives one point, from the closest points
+between the two edges.
+
+When there are more than 4 points they are reduced to: the deepest, the one farthest from it,
+and the two that span the largest triangles on either side of that line. This keeps the
+contact area, which matters for stable resting contact.

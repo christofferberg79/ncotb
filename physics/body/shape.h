@@ -6,7 +6,9 @@ namespace ncotb {
 
 /// Geometric shape of a rigid body, in body space (centred on the centre of mass).
 struct Shape {
-    enum class Type { Sphere, Box };
+    /// Plane: infinite, through the body position, normal along the body's +y axis.
+    /// Only meaningful for static bodies.
+    enum class Type { Sphere, Box, Plane };
 
     Type type = Type::Sphere;
     Real radius = 0.5;  ///< Sphere
@@ -14,9 +16,11 @@ struct Shape {
 
     static Shape sphere(Real r) { return {Type::Sphere, r, {}}; }
     static Shape box(const Vec3& halfExtents) { return {Type::Box, 0, halfExtents}; }
+    static Shape plane() { return {Type::Plane, 0, {}}; }
 
     /// Inertia tensor in body space for a solid body of the given mass.
     Mat3 inertia(Real mass) const {
+        if (type == Type::Plane) return {};
         if (type == Type::Sphere) {
             Real i = Real(2) / 5 * mass * radius * radius;
             return Mat3::diagonal({i, i, i});

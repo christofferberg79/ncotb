@@ -17,6 +17,22 @@ void World::step(Real h) {
     for (auto& b : bodies_)
         b->clearForces();
     time_ += h;
+    detectCollisions();
+}
+
+void World::detectCollisions() {
+    contacts_.clear();
+    ContactManifold m;
+    for (size_t i = 0; i < bodies_.size(); ++i) {
+        for (size_t j = i + 1; j < bodies_.size(); ++j) {
+            RigidBody& a = *bodies_[i];
+            RigidBody& b = *bodies_[j];
+            if (a.isStatic() && b.isStatic()) continue;
+            // Keep the dynamic body as a, so normals point away from static geometry.
+            bool hit = a.isStatic() ? collide(b, a, m, contactMargin) : collide(a, b, m, contactMargin);
+            if (hit) contacts_.push_back(m);
+        }
+    }
 }
 
 void World::applyForces(Real /*t*/) {

@@ -65,13 +65,27 @@ void drawBody(const RigidBody& b, Color color) {
     rlPushMatrix();
     rlMultMatrixf(m);
     const Shape& s = b.shape();
-    if (s.type == Shape::Type::Box) {
+    switch (s.type) {
+    case Shape::Type::Box: {
         ::Vector3 size = toRl(2 * s.halfExtents);
         DrawCubeV({0, 0, 0}, size, color);
         DrawCubeWiresV({0, 0, 0}, size, BLACK);
-    } else {
+        break;
+    }
+    case Shape::Type::Sphere:
         DrawSphereEx({0, 0, 0}, float(s.radius), 16, 16, color);
         DrawSphereWires({0, 0, 0}, float(s.radius) * 1.002f, 8, 8, BLACK);
+        break;
+    case Shape::Type::Plane: {
+        // Infinite plane drawn as a 20 x 20 patch in the body's xz-plane.
+        const float half = 10;
+        DrawPlane({0, -0.001f, 0}, {2 * half, 2 * half}, color);
+        for (float t = -half; t <= half; t += 1) {
+            DrawLine3D({-half, 0, t}, {half, 0, t}, {0, 0, 0, 40});
+            DrawLine3D({t, 0, -half}, {t, 0, half}, {0, 0, 0, 40});
+        }
+        break;
+    }
     }
     rlPopMatrix();
 }
@@ -80,6 +94,20 @@ void drawArrow(const Vec3& from, const Vec3& dir, Color color) {
     Vec3 to = from + dir;
     DrawLine3D(toRl(from), toRl(to), color);
     DrawSphere(toRl(to), 0.04f, color);
+}
+
+/// Contact points (red), normals from b towards a (orange) and penetration
+/// depth drawn along the normal (dark red).
+void drawContacts(const std::vector<ContactManifold>& contacts) {
+    for (const ContactManifold& m : contacts) {
+        for (int i = 0; i < m.count; ++i) {
+            const ContactPoint& p = m.points[i];
+            DrawSphere(toRl(p.position), 0.06f, RED);
+            drawArrow(p.position, m.normal * 0.5, ORANGE);
+            Vec3 half = m.normal * (p.depth / 2);
+            DrawLine3D(toRl(p.position - half), toRl(p.position + half), MAROON);
+        }
+    }
 }
 
 // ---------------------------------------------------------------- scenes
@@ -119,6 +147,42 @@ const std::vector<Scene>& scenes() {
                  b.setAngularVelocity({1.0 * i, 3, 2});
              }
          }},
+        {"Collision test (move bodies in the panel)",
+         [](World& w) {
+             w.gravity = {};
+             w.addBody(Shape::plane(), 0); // ground
+             RigidBody& ramp = w.addBody(Shape::plane(), 0);
+             ramp.x = {6, 0, 0};
+             ramp.q = Quat::fromAxisAngle({0, 0, 1}, 0.5);
+             RigidBody& block = w.addBody(Shape::box({1, 0.5, 1}), 0);
+             block.x = {-3, 0.5, 0};
+             RigidBody& b = w.addBody(Shape::box({0.5, 0.5, 0.5}), 1);
+             b.x = {-3, 1.45, 0.3};
+             b.q = Quat::fromAxisAngle({0, 1, 0}, 0.4);
+             RigidBody& s = w.addBody(Shape::sphere(0.5), 1);
+             s.x = {0, 0.45, 0};
+             RigidBody& b2 = w.addBody(Shape::box({0.4, 0.3, 0.6}), 1);
+             b2.x = {1.4, 0.6, 0};
+             b2.q = Quat::fromAxisAngle({1, 0, 1}, 0.6);
+             for (auto& body : w.bodies())
+                 body->updateDerived();
+         }},
+        {"Falling through the floor (no response yet)",
+         [](World& w) {
+             w.gravity = {0, -0.5, 0}; // slow, so the contacts are easy to follow
+             w.addBody(Shape::plane(), 0);
+             RigidBody& block = w.addBody(Shape::box({1.5, 0.4, 1.5}), 0);
+             block.x = {0, 0.4, 0};
+             block.updateDerived();
+             for (int i = 0; i < 5; ++i) {
+                 bool box = i % 2 == 0;
+                 RigidBody& b = w.addBody(box ? Shape::box({0.4, 0.3, 0.3}) : Shape::sphere(0.35), 1.0);
+                 b.x = {(i - 2) * 1.0, 2.5 + 0.4 * i, (i % 3 - 1) * 0.8};
+                 b.q = Quat::fromAxisAngle({1, 2, 3}, 0.7 * i);
+                 b.updateDerived();
+                 b.setAngularVelocity({0.5, 0.8 * (i - 2), 0.3});
+             }
+         }},
     };
     return list;
 }
@@ -133,7 +197,14 @@ struct App {
     float timeScale = 1.0f;
     int stepsPerSecond = 240;
     bool showVectors = true;
+    bool showContacts = true;
     double accumulator = 0;
+
+    // "Move a body" editor: rotation is applied on top of the orientation the
+    // body had when it was selected.
+    int editIndex = -1;
+    Quat editBaseQ{};
+    float editEulerDeg[3]{};
 
     static constexpr int kHistory = 600;
     std::array<float, kHistory> omegaHistory[3]{};
@@ -145,7 +216,9 @@ struct App {
         sceneIndex = i;
         world.clear();
         scenes()[i].build(world);
+        world.detectCollisions();
         accumulator = 0;
+        editIndex = -1;
         for (auto& h : omegaHistory)
             h.fill(0);
         energyErrorHistory.fill(0);
@@ -209,8 +282,15 @@ struct App {
         ImGui::SliderFloat("Time scale", &timeScale, 0.05f, 2.0f, "%.2f", ImGuiSliderFlags_Logarithmic);
         ImGui::SliderInt("Steps / s", &stepsPerSecond, 30, 1000);
         ImGui::Checkbox("Show omega (yellow) and L (magenta)", &showVectors);
+        ImGui::Checkbox("Show contacts", &showContacts);
 
-        ImGui::Separator();
+        contactsGui();
+        editGui();
+
+        if (!ImGui::CollapsingHeader("Energy and momentum", ImGuiTreeNodeFlags_DefaultOpen)) {
+            footer();
+            return;
+        }
         Real energy = world.totalEnergy();
         Vec3 L{}, P{};
         for (auto& b : world.bodies()) {
@@ -225,17 +305,103 @@ struct App {
         ImGui::Text("Ang. momentum |L| = %.5f", length(L));
         ImGui::Text("Lin. momentum |P| = %.5f", length(P));
 
-        if (!world.bodies().empty()) {
-            ImGui::Separator();
-            ImGui::TextUnformatted("Body 0 omega in body frame (x, y, z):");
+        if (!world.bodies().empty() && ImGui::CollapsingHeader("Body 0 angular velocity")) {
+            ImGui::TextUnformatted("omega in body frame (x, y, z):");
             const char* labels[3] = {"wx", "wy", "wz"};
             for (int k = 0; k < 3; ++k)
                 ImGui::PlotLines(labels[k], omegaHistory[k].data(), kHistory, historyPos, nullptr, -8.0f,
                                  8.0f, {0, 50});
         }
+        footer();
+    }
+
+    void footer() {
         ImGui::Separator();
         ImGui::TextDisabled("Drag: orbit   Wheel: zoom   %d FPS", GetFPS());
         ImGui::End();
+    }
+
+    void contactsGui() {
+        if (!ImGui::CollapsingHeader("Contacts", ImGuiTreeNodeFlags_DefaultOpen)) return;
+        int points = 0;
+        Real maxDepth = 0;
+        for (const ContactManifold& m : world.contacts()) {
+            points += m.count;
+            for (int i = 0; i < m.count; ++i)
+                maxDepth = std::max(maxDepth, m.points[i].depth);
+        }
+        ImGui::Text("%zu contacting pairs, %d points, max depth %.3f", world.contacts().size(), points,
+                    maxDepth);
+        if (ImGui::BeginTable("contacts", 4, ImGuiTableFlags_SizingFixedFit | ImGuiTableFlags_RowBg)) {
+            ImGui::TableSetupColumn("a");
+            ImGui::TableSetupColumn("b");
+            ImGui::TableSetupColumn("points");
+            ImGui::TableSetupColumn("normal (b to a)");
+            ImGui::TableHeadersRow();
+            for (const ContactManifold& m : world.contacts()) {
+                ImGui::TableNextRow();
+                ImGui::TableNextColumn();
+                ImGui::Text("%d", bodyIndex(m.a));
+                ImGui::TableNextColumn();
+                ImGui::Text("%d", bodyIndex(m.b));
+                ImGui::TableNextColumn();
+                ImGui::Text("%d", m.count);
+                ImGui::TableNextColumn();
+                ImGui::Text("%+.2f %+.2f %+.2f", m.normal.x, m.normal.y, m.normal.z);
+            }
+            ImGui::EndTable();
+        }
+    }
+
+    int bodyIndex(const RigidBody* b) const {
+        for (size_t i = 0; i < world.bodies().size(); ++i)
+            if (world.bodies()[i].get() == b) return int(i);
+        return -1;
+    }
+
+    static const char* shapeName(const RigidBody& b) {
+        switch (b.shape().type) {
+        case Shape::Type::Sphere: return "sphere";
+        case Shape::Type::Box: return "box";
+        case Shape::Type::Plane: return "plane";
+        }
+        return "?";
+    }
+
+    void editGui() {
+        if (!ImGui::CollapsingHeader("Move a body")) return;
+        const auto& bodies = world.bodies();
+        std::string current =
+            editIndex >= 0 ? std::to_string(editIndex) + " " + shapeName(*bodies[editIndex]) : "none";
+        if (ImGui::BeginCombo("Body", current.c_str())) {
+            for (int i = 0; i < int(bodies.size()); ++i) {
+                if (bodies[i]->shape().type == Shape::Type::Plane) continue;
+                std::string label = std::to_string(i) + " " + shapeName(*bodies[i]);
+                if (ImGui::Selectable(label.c_str(), i == editIndex)) {
+                    editIndex = i;
+                    editBaseQ = bodies[i]->q;
+                    for (float& e : editEulerDeg)
+                        e = 0;
+                }
+            }
+            ImGui::EndCombo();
+        }
+        if (editIndex < 0) return;
+
+        RigidBody& b = *bodies[editIndex];
+        float pos[3] = {float(b.x.x), float(b.x.y), float(b.x.z)};
+        bool changed = ImGui::DragFloat3("Position", pos, 0.01f);
+        changed |= ImGui::DragFloat3("Rotate x/y/z (deg)", editEulerDeg, 0.5f);
+        if (changed) {
+            b.x = {pos[0], pos[1], pos[2]};
+            const Real k = M_PI / 180;
+            Quat r = Quat::fromAxisAngle({0, 0, 1}, editEulerDeg[2] * k) *
+                     Quat::fromAxisAngle({0, 1, 0}, editEulerDeg[1] * k) *
+                     Quat::fromAxisAngle({1, 0, 0}, editEulerDeg[0] * k);
+            b.q = normalize(r * editBaseQ);
+            b.updateDerived();
+            world.detectCollisions();
+        }
     }
 };
 
@@ -281,12 +447,26 @@ int main() {
         DrawGrid(40, 1.0f);
         int i = 0;
         for (auto& b : app.world.bodies()) {
+            if (b->shape().type == Shape::Type::Plane) continue; // drawn below
+            if (b->isStatic()) {
+                drawBody(*b, {150, 155, 165, 255});
+                continue;
+            }
             drawBody(*b, palette[i++ % std::size(palette)]);
             if (app.showVectors) {
                 drawArrow(b->x, b->omega() * 0.3, {200, 160, 0, 255});
                 drawArrow(b->x, b->L * 0.3, MAGENTA);
             }
         }
+        // Translucent planes last and without depth writes, so bodies that sink
+        // below them stay visible.
+        rlDrawRenderBatchActive();
+        rlDisableDepthMask();
+        for (auto& b : app.world.bodies())
+            if (b->shape().type == Shape::Type::Plane) drawBody(*b, {120, 130, 145, 90});
+        rlDrawRenderBatchActive();
+        rlEnableDepthMask();
+        if (app.showContacts) drawContacts(app.world.contacts());
         EndMode3D();
 
         rlImGuiBegin();

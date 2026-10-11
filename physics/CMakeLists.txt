@@ -1,5 +1,6 @@
 add_library(physics STATIC
   body/rigid_body.cpp
+  collision/collide.cpp
   integration/integrator.cpp
   world.cpp)
 target_include_directories(physics PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})

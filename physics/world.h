@@ -1,6 +1,7 @@
 #pragma once
 
 #include "body/rigid_body.h"
+#include "collision/collide.h"
 #include "integration/integrator.h"
 
 #include <memory>
@@ -22,11 +23,21 @@ public:
     /// Removes all bodies; settings (gravity, integrator) are kept.
     void clear() {
         bodies_.clear();
+        contacts_.clear();
         time_ = 0;
     }
 
-    /// Advance the simulation by one fixed step h with the selected integrator.
+    /// Advance the simulation by one fixed step h with the selected integrator,
+    /// then find the contacts at the new state.
     void step(Real h);
+
+    /// Brute-force contact detection over all pairs with at least one dynamic body.
+    /// In each manifold a is dynamic (b may be static).
+    void detectCollisions();
+    /// Contacts found by the last detectCollisions() (or step()).
+    const std::vector<ContactManifold>& contacts() const { return contacts_; }
+    /// Contacts are also reported for shapes this close but not touching.
+    Real contactMargin = 0;
 
     const std::vector<std::unique_ptr<RigidBody>>& bodies() const { return bodies_; }
     Real time() const { return time_; }
@@ -46,6 +57,7 @@ private:
     void stepSemiImplicitEuler(Real h);
 
     std::vector<std::unique_ptr<RigidBody>> bodies_;
+    std::vector<ContactManifold> contacts_;
     Integrator generic_;
     Real time_ = 0;
 };
