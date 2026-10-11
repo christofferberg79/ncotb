@@ -84,3 +84,59 @@ between the two edges.
 When there are more than 4 points they are reduced to: the deepest, the one farthest from it,
 and the two that span the largest triangles on either side of that line. This keeps the
 contact area, which matters for stable resting contact.
+
+## Contact response (milestone 3)
+
+`physics/solver/`. Each (sub)step of semi-implicit Euler:
+
+1. forces → velocities (`P += F h`, `L += τ h`)
+2. detect contacts at the current positions (2 cm margin)
+3. solve the contact impulses, which changes `P` and `L`
+4. velocities → positions
+
+Each contact point is one constraint row at the velocity level:
+
+    v_n = n · (v_a + ω_a × r_a − v_b − ω_b × r_b) ≥ target,   λ ≥ 0,   λ (v_n − target) = 0
+
+Two solvers find the impulses λ:
+
+- **Sequential impulses** (Catto): projected Gauss–Seidel. It solves one row at a time and
+  clamps the *accumulated* impulse to ≥ 0. Warm starting from the previous step's impulses
+  matches points within 2 cm on body a. It has a fixed cost and can never freeze.
+- **Baraff LCP**: builds A = J M⁻¹ Jᵀ (rows are coupled through shared bodies) and
+  b = v_n − target, then solves the LCP exactly with the pivoting method from "Fast Contact
+  Force Computation". Fixes compared to the old cids code:
+  - a pivot limit (10n + 100);
+  - a check for "no blocking index" instead of indexing with −1;
+  - tolerances relative to the matrix scale instead of an absolute 0.01;
+  - a 10⁻⁹ regularization, so redundant contacts (4 coplanar points) don't make A singular;
+  - a linear solve that tolerates singular sub-matrices.
+
+  It's tested on 300 random problems, including singular ones, and with a box resting on a
+  face.
+
+The target velocity:
+- **touching** (0 ≤ depth ≤ slop): 0
+- **penetrating** beyond the slop: Baumgarte push-out, β/h · (depth − slop), β = 0.2
+- **apart but within the margin** (depth < 0): depth/h, so the body may close the gap but not
+  pass it ("speculative contacts", which prevent overshoot and jitter)
+- **restitution**: a second pass, only on rows that got an impulse while approaching faster
+  than 0.5 m/s, with target −e·v_n. This works with speculative contacts too.
+
+Restitution uses v_n from *before* the step's gravity was added. Using the velocity after
+gravity made an elastic ball bounce 1.8% higher at 240 Hz, because it reversed v + g·h
+instead of v. Now it returns to its drop height exactly.
+
+**Substeps beat iterations.** In a frictionless stack of 5 boxes, an unconverged Gauss–Seidel
+solve spreads the impulse unevenly over a face's 4 points. The tiny net torque tilts the boxes
+by about 10⁻⁴ rad, and they slide sideways (nothing resists that until friction arrives).
+Drift after 5 s:
+
+| Iterations × substeps | 10 × 1 | 40 × 1 | 10 × 4 | 80 × 1 |
+|---|---|---|---|---|
+| top box drift | 16 mm | 1.5 mm | 1.0 mm | 0.03 mm |
+
+The exact LCP solver doesn't drift at all. The app uses 4 substeps in contact scenes.
+
+**Known limitations:** no friction yet, so spheres roll and slide forever; no continuous
+collision detection, so a fast body can pass through a thin box.

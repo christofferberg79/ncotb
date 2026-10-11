@@ -20,6 +20,10 @@ public:
     Vec3 P{};
     Vec3 L{};
 
+    /// Coefficient of restitution (0 = no bounce, 1 = elastic). A contact uses the
+    /// larger value of the two bodies.
+    Real restitution = 0.3;
+
     // --- force/torque accumulators (cleared after each step) ---
     Vec3 force{};
     Vec3 torque{};
@@ -33,6 +37,17 @@ public:
     void clearForces() {
         force = {};
         torque = {};
+    }
+
+    /// Apply impulse J at world-space point p: P += J, L += (p - x) x J. Updates v
+    /// and omega directly (I^-1 is unchanged, so this matches updateDerived()).
+    void applyImpulse(const Vec3& J, const Vec3& p) {
+        if (isStatic()) return;
+        Vec3 dL = cross(p - x, J);
+        P += J;
+        L += dL;
+        v_ += J * invMass_;
+        omega_ += Iinv_ * dL;
     }
 
     /// Recompute R, I^-1, v and omega from the state variables.
@@ -63,6 +78,14 @@ public:
     /// Velocity of the world-space point p attached to the body: v + omega x (p - x).
     Vec3 pointVelocity(const Vec3& p) const { return v_ + cross(omega_, p - x); }
 
+    /// Remembers v and omega before this step's forces are applied. Restitution
+    /// uses these: the impact velocity, not the one including this step's gravity.
+    void markStepStart() {
+        vStart_ = v_;
+        omegaStart_ = omega_;
+    }
+    Vec3 pointVelocityAtStepStart(const Vec3& p) const { return vStart_ + cross(omegaStart_, p - x); }
+
     Real kineticEnergy() const;
 
 private:
@@ -76,6 +99,8 @@ private:
     Mat3 Iinv_;
     Vec3 v_{};
     Vec3 omega_{};
+    Vec3 vStart_{};
+    Vec3 omegaStart_{};
 };
 
 } // namespace ncotb

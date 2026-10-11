@@ -10,6 +10,9 @@ class RigidBody;
 struct ContactPoint {
     Vec3 position; ///< world space, midway between the two surfaces
     Real depth;    ///< penetration depth; negative means separated (within the margin)
+    /// Accumulated normal impulse from the contact solver (N s); also used to
+    /// warm start the next step.
+    Real normalImpulse = 0;
 };
 
 /// The contact between two bodies: one normal and up to four points (enough to

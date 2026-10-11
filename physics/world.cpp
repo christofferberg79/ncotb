@@ -10,14 +10,16 @@ RigidBody& World::addBody(const Shape& shape, Real mass) {
 }
 
 void World::step(Real h) {
-    if (integrator == IntegratorType::SemiImplicitEuler)
+    if (integrator == IntegratorType::SemiImplicitEuler) {
         stepSemiImplicitEuler(h);
-    else
+    } else {
         generic_.step(integrator, *this, time_, h);
+        detectCollisions(); // for display only
+        lastSubstep_ = h;
+    }
     for (auto& b : bodies_)
         b->clearForces();
     time_ += h;
-    detectCollisions();
 }
 
 void World::detectCollisions() {
@@ -41,29 +43,75 @@ void World::applyForces(Real /*t*/) {
 }
 
 void World::stepSemiImplicitEuler(Real h) {
-    applyForces(time_);
-    for (auto& body : bodies_) {
-        RigidBody& b = *body;
-        if (b.isStatic()) continue;
+    applyForces(time_); // forces are held constant over the substeps
+    const int n = std::max(substeps, 1);
+    const Real hs = h / n;
+    lastSubstep_ = hs;
+    for (int sub = 0; sub < n; ++sub) {
+        // Semi-implicit (symplectic) Euler: update momenta first, ...
+        for (auto& body : bodies_) {
+            RigidBody& b = *body;
+            b.markStepStart();
+            if (b.isStatic()) continue;
+            b.P += b.force * hs;
+            b.L += b.torque * hs;
+            b.updateDerived();
+        }
 
-        // Semi-implicit (symplectic) Euler: update momenta first, then positions
-        // using the new velocities. This is what contact solvers will hook into
-        // later (between the velocity and position updates).
-        b.P += b.force * h;
-        b.L += b.torque * h;
-        b.updateDerived();
+        // ... let the contact solver correct the velocities ...
+        detectCollisions();
+        if (resolveContacts) {
+            warmStartFromCache();
+            solver.solve(contacts_, hs);
+            updateCache();
+        }
 
-        b.x += b.v() * h;
-
-        // Orientation. Baraff's q' = 1/2 [0, omega] q integrated with plain Euler
-        // gains energy quickly for tumbling bodies, since omega = I^-1(q) L changes
-        // with q during the step. Instead rotate by the exponential map using
-        // omega evaluated at the midpoint orientation (2nd order, stays unit).
-        Quat qHalf = Quat::fromRotationVector(b.omega() * (h / 2)) * b.q;
-        Vec3 omegaHalf = b.omegaAt(qHalf);
-        b.q = normalize(Quat::fromRotationVector(omegaHalf * h) * b.q);
-        b.updateDerived();
+        // ... then move the bodies with the new velocities.
+        for (auto& body : bodies_)
+            if (!body->isStatic()) integratePosition(*body, hs);
     }
+}
+
+void World::integratePosition(RigidBody& b, Real h) {
+    b.x += b.v() * h;
+
+    // Orientation. Baraff's q' = 1/2 [0, omega] q integrated with plain Euler
+    // gains energy quickly for tumbling bodies, since omega = I^-1(q) L changes
+    // with q during the step. Instead rotate by the exponential map using
+    // omega evaluated at the midpoint orientation (2nd order, stays unit).
+    Quat qHalf = Quat::fromRotationVector(b.omega() * (h / 2)) * b.q;
+    Vec3 omegaHalf = b.omegaAt(qHalf);
+    b.q = normalize(Quat::fromRotationVector(omegaHalf * h) * b.q);
+    b.updateDerived();
+}
+
+void World::warmStartFromCache() {
+    // A new point continues an old one if it is on the same pair and within 2 cm
+    // of where the old point was, measured on body a.
+    const Real tolerance2 = 0.02 * 0.02;
+    for (ContactManifold& m : contacts_) {
+        for (int i = 0; i < m.count; ++i) {
+            ContactPoint& p = m.points[i];
+            Vec3 local = transpose(m.a->R()) * (p.position - m.a->x);
+            Real best = tolerance2;
+            for (const CachedPoint& c : cache_) {
+                if (c.a != m.a || c.b != m.b) continue;
+                Real d2 = lengthSquared(c.localA - local);
+                if (d2 < best) {
+                    best = d2;
+                    p.normalImpulse = c.impulse;
+                }
+            }
+        }
+    }
+}
+
+void World::updateCache() {
+    cache_.clear();
+    for (const ContactManifold& m : contacts_)
+        for (int i = 0; i < m.count; ++i)
+            cache_.push_back(
+                {m.a, m.b, transpose(m.a->R()) * (m.points[i].position - m.a->x), m.points[i].normalImpulse});
 }
 
 Real World::totalEnergy() const {

@@ -98,14 +98,17 @@ void drawArrow(const Vec3& from, const Vec3& dir, Color color) {
 
 /// Contact points (red), normals from b towards a (orange) and penetration
 /// depth drawn along the normal (dark red).
-void drawContacts(const std::vector<ContactManifold>& contacts) {
+/// Contact forces (green) on body a: impulse / step length, scaled to metres.
+void drawContacts(const std::vector<ContactManifold>& contacts, bool normals, Real forceScale, Real h) {
     for (const ContactManifold& m : contacts) {
         for (int i = 0; i < m.count; ++i) {
             const ContactPoint& p = m.points[i];
             DrawSphere(toRl(p.position), 0.06f, RED);
-            drawArrow(p.position, m.normal * 0.5, ORANGE);
+            if (normals) drawArrow(p.position, m.normal * 0.5, ORANGE);
             Vec3 half = m.normal * (p.depth / 2);
             DrawLine3D(toRl(p.position - half), toRl(p.position + half), MAROON);
+            if (forceScale > 0 && p.normalImpulse > 0)
+                drawArrow(p.position, m.normal * (p.normalImpulse / h * forceScale), {0, 160, 60, 255});
         }
     }
 }
@@ -114,19 +117,31 @@ void drawContacts(const std::vector<ContactManifold>& contacts) {
 
 struct Scene {
     const char* name;
+    /// Contact scenes use semi-implicit Euler (the only integrator that resolves
+    /// contacts) and show the contact solver settings.
+    bool contacts;
     std::function<void(World&)> build;
 };
 
+/// Adds a dynamic body at x with orientation q.
+RigidBody& place(World& w, const Shape& shape, Real mass, const Vec3& x, const Quat& q = {}) {
+    RigidBody& b = w.addBody(shape, mass);
+    b.x = x;
+    b.q = q;
+    b.updateDerived();
+    return b;
+}
+
 const std::vector<Scene>& scenes() {
     static const std::vector<Scene> list = {
-        {"Intermediate axis (Dzhanibekov)",
+        {"Intermediate axis (Dzhanibekov)", false,
          [](World& w) {
              w.gravity = {};
              RigidBody& b = w.addBody(Shape::box({1.2, 0.6, 0.2}), 1.0);
              b.x = {0, 2, 0};
              b.setAngularVelocity({0.01, 5.0, 0.01});
          }},
-        {"Three principal axes",
+        {"Three principal axes", false,
          [](World& w) {
              w.gravity = {};
              const Vec3 spins[3] = {{6, 0.05, 0.05}, {0.05, 6, 0.05}, {0.05, 0.05, 6}};
@@ -136,7 +151,7 @@ const std::vector<Scene>& scenes() {
                  b.setAngularVelocity(spins[i]);
              }
          }},
-        {"Thrown boxes and balls",
+        {"Thrown boxes and balls", false,
          [](World& w) {
              w.gravity = {0, -9.81, 0};
              for (int i = 0; i < 6; ++i) {
@@ -147,7 +162,7 @@ const std::vector<Scene>& scenes() {
                  b.setAngularVelocity({1.0 * i, 3, 2});
              }
          }},
-        {"Collision test (move bodies in the panel)",
+        {"Collision test (move bodies in the panel)", true,
          [](World& w) {
              w.gravity = {};
              w.addBody(Shape::plane(), 0); // ground
@@ -167,21 +182,41 @@ const std::vector<Scene>& scenes() {
              for (auto& body : w.bodies())
                  body->updateDerived();
          }},
-        {"Falling through the floor (no response yet)",
+        {"Balls and boxes", true,
          [](World& w) {
-             w.gravity = {0, -0.5, 0}; // slow, so the contacts are easy to follow
+             w.gravity = {0, -9.81, 0};
              w.addBody(Shape::plane(), 0);
-             RigidBody& block = w.addBody(Shape::box({1.5, 0.4, 1.5}), 0);
-             block.x = {0, 0.4, 0};
+             RigidBody& block = w.addBody(Shape::box({1.5, 0.4, 1.0}), 0);
+             block.x = {-1.5, 0.4, 0};
              block.updateDerived();
-             for (int i = 0; i < 5; ++i) {
+             for (int i = 0; i < 12; ++i) {
                  bool box = i % 2 == 0;
-                 RigidBody& b = w.addBody(box ? Shape::box({0.4, 0.3, 0.3}) : Shape::sphere(0.35), 1.0);
-                 b.x = {(i - 2) * 1.0, 2.5 + 0.4 * i, (i % 3 - 1) * 0.8};
-                 b.q = Quat::fromAxisAngle({1, 2, 3}, 0.7 * i);
-                 b.updateDerived();
-                 b.setAngularVelocity({0.5, 0.8 * (i - 2), 0.3});
+                 Shape shape = box ? Shape::box({0.35, 0.25, 0.3}) : Shape::sphere(0.3);
+                 Vec3 x{(i % 4 - 1.5) * 1.1, 2.0 + 0.8 * i, (i % 3 - 1) * 0.9};
+                 RigidBody& b = place(w, shape, 1.0, x, Quat::fromAxisAngle({1, 2, 3}, 0.7 * i));
+                 b.restitution = box ? 0.2 : 0.5;
+                 b.setAngularVelocity({0.5, 0.8 * (i % 5 - 2), 0.3});
              }
+         }},
+        {"Box stack", true,
+         [](World& w) {
+             w.gravity = {0, -9.81, 0};
+             w.addBody(Shape::plane(), 0).restitution = 0;
+             for (int i = 0; i < 6; ++i)
+                 place(w, Shape::box({0.5, 0.5, 0.5}), 1, {-2, 0.5 + 1.0 * i, 0}).restitution = 0;
+             // pyramid of 3 + 2 + 1 boxes
+             for (int row = 0; row < 3; ++row)
+                 for (int k = 0; k < 3 - row; ++k)
+                     place(w, Shape::box({0.4, 0.4, 0.4}), 1,
+                           {1.5 + (k - (2 - row) / 2.0) * 0.82, 0.4 + 0.8 * row, 0})
+                         .restitution = 0;
+         }},
+        {"Restitution (e = 0, 0.25, 0.5, 0.75, 1)", true,
+         [](World& w) {
+             w.gravity = {0, -9.81, 0};
+             w.addBody(Shape::plane(), 0).restitution = 0;
+             for (int i = 0; i < 5; ++i)
+                 place(w, Shape::sphere(0.3), 1, {(i - 2) * 1.0, 2.3, 0}).restitution = 0.25 * i;
          }},
     };
     return list;
@@ -198,10 +233,15 @@ struct App {
     int stepsPerSecond = 240;
     bool showVectors = true;
     bool showContacts = true;
+    bool showNormals = false;
+    float forceScale = 0.05f; ///< metres per newton for the force arrows (0: off)
+    int contactSubsteps = 4;  ///< substeps in contact scenes
+    Vec3 sceneGravity{};      ///< the scene's own gravity, for the on/off switch
     double accumulator = 0;
 
     // "Move a body" editor: rotation is applied on top of the orientation the
     // body had when it was selected.
+    IntegratorType freeIntegrator = IntegratorType::SemiImplicitEuler; ///< choice for free-motion scenes
     int editIndex = -1;
     Quat editBaseQ{};
     float editEulerDeg[3]{};
@@ -215,7 +255,16 @@ struct App {
     void loadScene(int i) {
         sceneIndex = i;
         world.clear();
-        scenes()[i].build(world);
+        const Scene& scene = scenes()[i];
+        if (scene.contacts) {
+            world.integrator = IntegratorType::SemiImplicitEuler;
+            world.substeps = contactSubsteps;
+        } else {
+            world.integrator = freeIntegrator;
+            world.substeps = 1; // keep the integrator comparison at the plain step length
+        }
+        scene.build(world);
+        sceneGravity = world.gravity;
         world.detectCollisions();
         accumulator = 0;
         editIndex = -1;
@@ -271,19 +320,30 @@ struct App {
         ImGui::SameLine();
         if (ImGui::Button("Step (S)")) stepOnce = true;
 
+        const bool contactScene = scenes()[sceneIndex].contacts;
+        ImGui::BeginDisabled(contactScene);
         if (ImGui::BeginCombo("Integrator", name(world.integrator))) {
             for (IntegratorType type : kAllIntegrators)
                 if (ImGui::Selectable(name(type), type == world.integrator)) {
-                    world.integrator = type;
+                    freeIntegrator = type;
                     loadScene(sceneIndex); // restart so E - E0 compares like with like
                 }
             ImGui::EndCombo();
         }
+        ImGui::EndDisabled();
+        if (contactScene)
+            ImGui::SetItemTooltip("Contacts are resolved between the velocity and position updates,\n"
+                                  "which only semi-implicit Euler has. See docs/notes.md.");
         ImGui::SliderFloat("Time scale", &timeScale, 0.05f, 2.0f, "%.2f", ImGuiSliderFlags_Logarithmic);
         ImGui::SliderInt("Steps / s", &stepsPerSecond, 30, 1000);
         ImGui::Checkbox("Show omega (yellow) and L (magenta)", &showVectors);
+        bool gravityOn = lengthSquared(world.gravity) > 0;
+        if (ImGui::Checkbox("Gravity", &gravityOn))
+            world.gravity =
+                gravityOn ? (lengthSquared(sceneGravity) > 0 ? sceneGravity : Vec3{0, -9.81, 0}) : Vec3{};
         ImGui::Checkbox("Show contacts", &showContacts);
 
+        if (contactScene) solverGui();
         contactsGui();
         editGui();
 
@@ -321,8 +381,36 @@ struct App {
         ImGui::End();
     }
 
+    void solverGui() {
+        if (!ImGui::CollapsingHeader("Contact solver", ImGuiTreeNodeFlags_DefaultOpen)) return;
+        ContactSettings& cs = world.solver.settings;
+        if (ImGui::BeginCombo("Solver", name(cs.type))) {
+            for (ContactSolverType t : {ContactSolverType::SequentialImpulses, ContactSolverType::BaraffLcp})
+                if (ImGui::Selectable(name(t), t == cs.type)) cs.type = t;
+            ImGui::EndCombo();
+        }
+        if (ImGui::SliderInt("Substeps", &contactSubsteps, 1, 16)) world.substeps = contactSubsteps;
+        ImGui::BeginDisabled(cs.type != ContactSolverType::SequentialImpulses);
+        ImGui::SliderInt("Iterations", &cs.iterations, 1, 50);
+        ImGui::Checkbox("Warm start", &cs.warmStart);
+        ImGui::EndDisabled();
+        float beta = float(cs.baumgarte), slopMm = float(cs.slop * 1000);
+        if (ImGui::SliderFloat("Baumgarte", &beta, 0, 1)) cs.baumgarte = beta;
+        if (ImGui::SliderFloat("Slop (mm)", &slopMm, 0, 20)) cs.slop = slopMm / 1000;
+        ImGui::Checkbox("Resolve contacts", &world.resolveContacts);
+        const ContactSolverStats& st = world.solver.stats();
+        if (cs.type == ContactSolverType::BaraffLcp)
+            ImGui::Text("%d rows, %d pivots%s", st.rows, st.pivots, st.lcpFailed ? "  PIVOT LIMIT HIT" : "");
+        else
+            ImGui::Text("%d rows", st.rows);
+    }
+
     void contactsGui() {
         if (!ImGui::CollapsingHeader("Contacts", ImGuiTreeNodeFlags_DefaultOpen)) return;
+        ImGui::Checkbox("Normals", &showNormals);
+        ImGui::SameLine();
+        ImGui::SetNextItemWidth(120);
+        ImGui::SliderFloat("Force arrows (m/N)", &forceScale, 0, 0.2f);
         int points = 0;
         Real maxDepth = 0;
         for (const ContactManifold& m : world.contacts()) {
@@ -332,11 +420,12 @@ struct App {
         }
         ImGui::Text("%zu contacting pairs, %d points, max depth %.3f", world.contacts().size(), points,
                     maxDepth);
-        if (ImGui::BeginTable("contacts", 4, ImGuiTableFlags_SizingFixedFit | ImGuiTableFlags_RowBg)) {
+        if (ImGui::BeginTable("contacts", 5, ImGuiTableFlags_SizingFixedFit | ImGuiTableFlags_RowBg)) {
             ImGui::TableSetupColumn("a");
             ImGui::TableSetupColumn("b");
             ImGui::TableSetupColumn("points");
             ImGui::TableSetupColumn("normal (b to a)");
+            ImGui::TableSetupColumn("force (N)");
             ImGui::TableHeadersRow();
             for (const ContactManifold& m : world.contacts()) {
                 ImGui::TableNextRow();
@@ -348,6 +437,11 @@ struct App {
                 ImGui::Text("%d", m.count);
                 ImGui::TableNextColumn();
                 ImGui::Text("%+.2f %+.2f %+.2f", m.normal.x, m.normal.y, m.normal.z);
+                ImGui::TableNextColumn();
+                Real impulse = 0;
+                for (int k = 0; k < m.count; ++k)
+                    impulse += m.points[k].normalImpulse;
+                ImGui::Text("%.2f", world.lastSubstep() > 0 ? impulse / world.lastSubstep() : 0.0);
             }
             ImGui::EndTable();
         }
@@ -466,7 +560,15 @@ int main() {
             if (b->shape().type == Shape::Type::Plane) drawBody(*b, {120, 130, 145, 90});
         rlDrawRenderBatchActive();
         rlEnableDepthMask();
-        if (app.showContacts) drawContacts(app.world.contacts());
+        if (app.showContacts) {
+            // Overlay without depth test: force arrows point into body a and
+            // would otherwise be hidden inside it.
+            rlDrawRenderBatchActive();
+            rlDisableDepthTest();
+            drawContacts(app.world.contacts(), app.showNormals, app.forceScale, app.world.lastSubstep());
+            rlDrawRenderBatchActive();
+            rlEnableDepthTest();
+        }
         EndMode3D();
 
         rlImGuiBegin();
