@@ -10,7 +10,8 @@ namespace {
 
 constexpr Real kH = 1.0 / 240;
 constexpr Real kG = 9.81;
-constexpr ContactSolverType kSolvers[] = {ContactSolverType::SequentialImpulses, ContactSolverType::BaraffLcp};
+constexpr ContactSolverType kSolvers[] = {ContactSolverType::SequentialImpulses,
+                                          ContactSolverType::BaraffLcp};
 
 /// A world with a ground plane tilted by theta about z, and both bodies' mu set
 /// so the combined sqrt(mu_a mu_b) is mu.
@@ -78,7 +79,8 @@ TEST_CASE("a box slides down a ramp with a = g (sin theta - mu cos theta)") {
         const Real theta = 30 * M_PI / 180, mu = 0.2;
         Ramp r(solver, theta);
         RigidBody& box = r.add(Shape::box({0.4, 0.25, 0.3}), 2, mu, 0.25);
-        CHECK(slopeAcceleration(r, box) == doctest::Approx(kG * (std::sin(theta) - mu * std::cos(theta))).epsilon(0.02));
+        CHECK(slopeAcceleration(r, box) ==
+              doctest::Approx(kG * (std::sin(theta) - mu * std::cos(theta))).epsilon(0.02));
     }
 }
 
@@ -129,7 +131,8 @@ TEST_CASE("a sliding box stops after v0^2 / (2 mu g), and friction stays inside 
             r.w.step(kH);
             for (const ContactManifold& m : r.w.contacts())
                 for (int k = 0; k < m.count; ++k)
-                    insideCone &= length(m.points[k].tangentImpulse) <= mu * m.points[k].normalImpulse * (1 + 1e-9);
+                    insideCone &=
+                        length(m.points[k].tangentImpulse) <= mu * m.points[k].normalImpulse * (1 + 1e-9);
         }
         CHECK(insideCone);
         CHECK(length(box.v()) < 1e-3);

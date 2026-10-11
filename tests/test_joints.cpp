@@ -10,7 +10,8 @@ namespace {
 
 constexpr Real kH = 1.0 / 240;
 constexpr Real kG = 9.81;
-constexpr ContactSolverType kSolvers[] = {ContactSolverType::SequentialImpulses, ContactSolverType::BaraffLcp};
+constexpr ContactSolverType kSolvers[] = {ContactSolverType::SequentialImpulses,
+                                          ContactSolverType::BaraffLcp};
 
 RigidBody& place(World& w, const Shape& shape, Real mass, const Vec3& x, const Quat& q = {}) {
     RigidBody& b = w.addBody(shape, mass);
@@ -48,7 +49,8 @@ TEST_CASE("a ball on a ball joint swings with the pendulum period") {
         w.substeps = 4;
         const Real L = 1, r = 0.1, m = 1, theta0 = 5 * M_PI / 180;
         const Vec3 pivot{0, 2, 0};
-        RigidBody& bob = place(w, Shape::sphere(r), m, pivot + Vec3{L * std::sin(theta0), -L * std::cos(theta0), 0});
+        RigidBody& bob =
+            place(w, Shape::sphere(r), m, pivot + Vec3{L * std::sin(theta0), -L * std::cos(theta0), 0});
         BallJoint& j = w.addBallJoint(w.ground(), bob, pivot);
         Real E0 = w.totalEnergy();
         Real period = measurePeriod(w, 10, [&] { return bob.x.x; });
@@ -79,9 +81,9 @@ TEST_CASE("a bar on a hinge swings only about the hinge axis") {
     // physical pendulum period, small amplitude
     World w2;
     w2.substeps = 4;
-    RigidBody& b2 =
-        place(w2, Shape::box({0.05, half, 0.05}), m, pivot + Vec3{half * std::sin(0.05), -half * std::cos(0.05), 0},
-              Quat::fromAxisAngle({0, 0, 1}, 0.05));
+    RigidBody& b2 = place(w2, Shape::box({0.05, half, 0.05}), m,
+                          pivot + Vec3{half * std::sin(0.05), -half * std::cos(0.05), 0},
+                          Quat::fromAxisAngle({0, 0, 1}, 0.05));
     w2.addHinge(w2.ground(), b2, pivot, {0, 0, 1});
     Real I = m * (1.0 * 1.0 + 0.1 * 0.1) / 12 + m * half * half;
     Real period = measurePeriod(w2, 10, [&] { return b2.x.x; });
@@ -100,7 +102,8 @@ TEST_CASE("a hanging chain is still and the top joint carries its whole weight")
         BallJoint* top = nullptr;
         const Vec3 pivot{0, 4, 0};
         for (int i = 0; i < n; ++i) {
-            RigidBody& b = place(w, Shape::box({0.04, link / 2, 0.04}), m, pivot - Vec3{0, link * (i + 0.5), 0});
+            RigidBody& b =
+                place(w, Shape::box({0.04, link / 2, 0.04}), m, pivot - Vec3{0, link * (i + 0.5), 0});
             BallJoint& j = w.addBallJoint(*prev, b, pivot - Vec3{0, link * i, 0});
             if (i == 0) top = &j;
             prev = &b;
@@ -240,7 +243,8 @@ TEST_CASE("Newton's cradle passes the momentum to the last ball (gaps wider than
         for (int i = 0; i < 5; ++i) {
             Vec3 pivot{i * (2 * r + gap), 4, 0};
             Real a = i == 0 ? -a0 : 0;
-            RigidBody& b = place(w, Shape::sphere(r), 1, pivot + Vec3{len * std::sin(a), -len * std::cos(a), 0});
+            RigidBody& b =
+                place(w, Shape::sphere(r), 1, pivot + Vec3{len * std::sin(a), -len * std::cos(a), 0});
             b.restitution = 1;
             b.friction = 0;
             w.addBallJoint(w.ground(), b, pivot);

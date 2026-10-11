@@ -51,7 +51,8 @@ bool ContactSolver::useLcp() const {
     return settings.type == ContactSolverType::BaraffLcp && !stats_.lcpTooLarge;
 }
 
-void ContactSolver::prepare(std::vector<ContactManifold>& contacts, const std::vector<Joint*>& joints, Real h) {
+void ContactSolver::prepare(std::vector<ContactManifold>& contacts, const std::vector<Joint*>& joints,
+                            Real h) {
     rows_.clear();
     stats_ = {};
     h_ = h;

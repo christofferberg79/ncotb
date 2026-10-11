@@ -22,13 +22,15 @@ using Points = std::vector<ContactPoint>;
 void reduceToFour(Points& pts, const Vec3& n) {
     if (pts.size() <= ContactManifold::kMaxPoints) return;
 
-    auto deepest = std::max_element(pts.begin(), pts.end(),
-                                    [](const ContactPoint& p, const ContactPoint& q) { return p.depth < q.depth; });
+    auto deepest = std::max_element(pts.begin(), pts.end(), [](const ContactPoint& p, const ContactPoint& q) {
+        return p.depth < q.depth;
+    });
     const Vec3 p0 = deepest->position;
 
-    auto farthest = std::max_element(pts.begin(), pts.end(), [&](const ContactPoint& p, const ContactPoint& q) {
-        return lengthSquared(p.position - p0) < lengthSquared(q.position - p0);
-    });
+    auto farthest =
+        std::max_element(pts.begin(), pts.end(), [&](const ContactPoint& p, const ContactPoint& q) {
+            return lengthSquared(p.position - p0) < lengthSquared(q.position - p0);
+        });
     const Vec3 p1 = farthest->position;
 
     auto area = [&](const ContactPoint& p) { return dot(cross(p1 - p0, p.position - p0), n); };
@@ -179,7 +181,8 @@ void faceContact(const RigidBody& ref, int refAxis, const Vec3& refNormal, const
     const Vec3 incCenter = inc.x + axis * (sign * hi[incAxis]);
     const int u = (incAxis + 1) % 3, v = (incAxis + 2) % 3;
     const Vec3 du = inc.R().column(u) * hi[u], dv = inc.R().column(v) * hi[v];
-    std::vector<Vec3> poly{incCenter + du + dv, incCenter - du + dv, incCenter - du - dv, incCenter + du - dv};
+    std::vector<Vec3> poly{incCenter + du + dv, incCenter - du + dv, incCenter - du - dv,
+                           incCenter + du - dv};
 
     // Clip against the four side planes of the reference face.
     for (int k = 0; k < 3 && !poly.empty(); ++k) {
@@ -259,8 +262,10 @@ bool boxBox(const RigidBody& a, const RigidBody& b, ContactManifold& m, Real mar
 
     Points pts;
     if (!useEdge) {
-        if (best.j >= 0) faceContact(b, best.j, n, a, margin, pts);  // b's face, normal towards a
-        else faceContact(a, best.i, -n, b, margin, pts);             // a's face, normal towards b
+        if (best.j >= 0)
+            faceContact(b, best.j, n, a, margin, pts); // b's face, normal towards a
+        else
+            faceContact(a, best.i, -n, b, margin, pts); // a's face, normal towards b
         return finish(m, n, pts);
     }
 
@@ -296,13 +301,18 @@ bool collide(RigidBody& a, RigidBody& b, ContactManifold& m, Real margin) {
     using T = Shape::Type;
     switch (s.shape().type) {
     case T::Sphere:
-        if (t.shape().type == T::Sphere) hit = sphereSphere(s, t, m, margin);
-        else if (t.shape().type == T::Box) hit = sphereBox(s, t, m, margin);
-        else hit = spherePlane(s, t, m, margin);
+        if (t.shape().type == T::Sphere)
+            hit = sphereSphere(s, t, m, margin);
+        else if (t.shape().type == T::Box)
+            hit = sphereBox(s, t, m, margin);
+        else
+            hit = spherePlane(s, t, m, margin);
         break;
     case T::Box:
-        if (t.shape().type == T::Box) hit = boxBox(s, t, m, margin);
-        else hit = boxPlane(s, t, m, margin);
+        if (t.shape().type == T::Box)
+            hit = boxBox(s, t, m, margin);
+        else
+            hit = boxPlane(s, t, m, margin);
         break;
     case T::Plane: break; // plane-plane
     }
