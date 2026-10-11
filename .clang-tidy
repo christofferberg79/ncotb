@@ -1,0 +1,13 @@
+# Checks shown by clangd in the editor. Kept to likely bugs and cheap performance wins.
+Checks: >
+  -*,
+  bugprone-*,
+  -bugprone-easily-swappable-parameters,
+  -bugprone-narrowing-conversions,
+  performance-*,
+  -performance-enum-size,
+  modernize-use-override,
+  modernize-use-nullptr,
+  readability-misleading-indentation
+WarningsAsErrors: ''
+HeaderFilterRegex: '^(physics|app|tests)/'

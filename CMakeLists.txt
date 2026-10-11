@@ -56,6 +56,13 @@ add_library(imgui STATIC
 target_include_directories(imgui PUBLIC ${imgui_SOURCE_DIR} ${rlimgui_SOURCE_DIR})
 target_link_libraries(imgui PUBLIC raylib)
 
+# AddressSanitizer + UndefinedBehaviorSanitizer for our own code (not the dependencies above).
+option(NCOTB_SANITIZE "Build physics, app and tests with ASan + UBSan" OFF)
+if(NCOTB_SANITIZE)
+  add_compile_options(-fsanitize=address,undefined -fno-sanitize-recover=undefined -fno-omit-frame-pointer)
+  add_link_options(-fsanitize=address,undefined)
+endif()
+
 add_subdirectory(physics)
 add_subdirectory(app)
 

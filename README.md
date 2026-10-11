@@ -7,13 +7,28 @@ raylib + Dear ImGui. See [docs/notes.md](docs/notes.md) for design notes.
 
 ```sh
 brew install cmake ninja          # once
-cmake -B build -G Ninja           # first configure downloads raylib, imgui, rlImGui, doctest
-cmake --build build
-./build/tests/physics_tests       # or: ctest --test-dir build
+cmake --preset release            # first configure downloads raylib, imgui, rlImGui, doctest
+cmake --build --preset release
+./build/tests/physics_tests       # or: ctest --preset release
 ./build/app/ncotb
 ```
 
+Presets (`CMakePresets.json`):
+
+| Preset    | Directory      | Use |
+|-----------|----------------|-----|
+| `debug`   | `build-debug/` | debugging (VS Code launch configs, clangd) |
+| `release` | `build/`       | running at full speed (RelWithDebInfo) |
+| `asan`    | `build-asan/`  | Debug + AddressSanitizer/UBSan for our code |
+
 Controls: drag to orbit, wheel to zoom, Space pause, S single step, R reset.
+
+### VS Code
+
+Recommended extensions: clangd, CodeLLDB, CMake Tools (see `.vscode/extensions.json`).
+⇧⌘B builds the debug preset; the Run and Debug panel has configs for the app and the tests
+(also filtered by test name, and under ASan/UBSan). clangd uses Apple's `/usr/bin/clangd`,
+formats on save with `.clang-format`, and shows the clang-tidy checks in `.clang-tidy`.
 
 ## Layout
 

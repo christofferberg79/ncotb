@@ -1,0 +1,21 @@
+{
+    // clangd (code completion, diagnostics, clang-tidy, formatting) instead of the
+    // Microsoft C/C++ IntelliSense. Apple's clangd matches Apple clang and finds the SDK.
+    "clangd.path": "/usr/bin/clangd",
+    "clangd.arguments": [
+        "--compile-commands-dir=${workspaceFolder}/build-debug",
+        "--clang-tidy",
+        "--header-insertion=never",
+        "--background-index"
+    ],
+    "C_Cpp.intelliSenseEngine": "disabled",
+
+    "[cpp]": {
+        "editor.defaultFormatter": "llvm-vs-code-extensions.vscode-clangd",
+        "editor.formatOnSave": true
+    },
+
+    // CMake Tools reads CMakePresets.json, like the tasks and the command line.
+    "cmake.useCMakePresets": "always",
+    "cmake.configureOnOpen": false
+}

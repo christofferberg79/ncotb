@@ -1,0 +1,64 @@
+{
+    // All builds go through CMakePresets.json: debug -> build-debug/, release -> build/,
+    // asan -> build-asan/. `cmake --preset X` is only run when the build dir is missing.
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "build (debug)",
+            "type": "shell",
+            "command": "test -f build-debug/build.ninja || cmake --preset debug; cmake --build --preset debug",
+            "options": { "cwd": "${workspaceFolder}" },
+            "group": { "kind": "build", "isDefault": true },
+            "problemMatcher": { "base": "$gcc", "fileLocation": ["autoDetect", "${workspaceFolder}/build-debug"] }
+        },
+        {
+            "label": "build (release)",
+            "type": "shell",
+            "command": "test -f build/build.ninja || cmake --preset release; cmake --build --preset release",
+            "options": { "cwd": "${workspaceFolder}" },
+            "group": "build",
+            "problemMatcher": { "base": "$gcc", "fileLocation": ["autoDetect", "${workspaceFolder}/build"] }
+        },
+        {
+            "label": "build (asan)",
+            "type": "shell",
+            "command": "test -f build-asan/build.ninja || cmake --preset asan; cmake --build --preset asan",
+            "options": { "cwd": "${workspaceFolder}" },
+            "group": "build",
+            "problemMatcher": { "base": "$gcc", "fileLocation": ["autoDetect", "${workspaceFolder}/build-asan"] }
+        },
+        {
+            "label": "run tests",
+            "type": "shell",
+            "command": "./build-debug/tests/physics_tests",
+            "options": { "cwd": "${workspaceFolder}" },
+            "dependsOn": "build (debug)",
+            "group": { "kind": "test", "isDefault": true },
+            "problemMatcher": []
+        },
+        {
+            "label": "run tests (asan)",
+            "type": "shell",
+            "command": "./build-asan/tests/physics_tests",
+            "options": { "cwd": "${workspaceFolder}" },
+            "dependsOn": "build (asan)",
+            "group": "test",
+            "problemMatcher": []
+        },
+        {
+            "label": "run app (release)",
+            "type": "shell",
+            "command": "./build/app/ncotb",
+            "options": { "cwd": "${workspaceFolder}" },
+            "dependsOn": "build (release)",
+            "problemMatcher": []
+        },
+        {
+            "label": "format all",
+            "type": "shell",
+            "command": "xcrun clang-format -i $(git ls-files '*.h' '*.cpp')",
+            "options": { "cwd": "${workspaceFolder}" },
+            "problemMatcher": []
+        }
+    ]
+}

@@ -1,0 +1,57 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Debug app",
+            "type": "lldb",
+            "request": "launch",
+            "program": "${workspaceFolder}/build-debug/app/ncotb",
+            "cwd": "${workspaceFolder}",
+            "preLaunchTask": "build (debug)"
+        },
+        {
+            "name": "Debug tests",
+            "type": "lldb",
+            "request": "launch",
+            "program": "${workspaceFolder}/build-debug/tests/physics_tests",
+            "cwd": "${workspaceFolder}",
+            "preLaunchTask": "build (debug)"
+        },
+        {
+            "name": "Debug tests (filter by name)",
+            "type": "lldb",
+            "request": "launch",
+            "program": "${workspaceFolder}/build-debug/tests/physics_tests",
+            "args": ["--test-case=${input:testCase}", "--break"],
+            "cwd": "${workspaceFolder}",
+            "preLaunchTask": "build (debug)"
+        },
+        {
+            // Stops in the debugger at the first memory error or undefined behaviour.
+            "name": "Debug tests (ASan/UBSan)",
+            "type": "lldb",
+            "request": "launch",
+            "program": "${workspaceFolder}/build-asan/tests/physics_tests",
+            "cwd": "${workspaceFolder}",
+            "env": { "UBSAN_OPTIONS": "print_stacktrace=1" },
+            "preLaunchTask": "build (asan)"
+        },
+        {
+            "name": "Debug app (ASan/UBSan)",
+            "type": "lldb",
+            "request": "launch",
+            "program": "${workspaceFolder}/build-asan/app/ncotb",
+            "cwd": "${workspaceFolder}",
+            "env": { "UBSAN_OPTIONS": "print_stacktrace=1" },
+            "preLaunchTask": "build (asan)"
+        }
+    ],
+    "inputs": [
+        {
+            "id": "testCase",
+            "type": "promptString",
+            "description": "doctest test case name (wildcards allowed, e.g. *free fall*)",
+            "default": "*"
+        }
+    ]
+}
