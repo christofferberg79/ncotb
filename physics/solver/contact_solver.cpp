@@ -51,10 +51,14 @@ bool ContactSolver::useLcp() const {
     return settings.type == ContactSolverType::BaraffLcp && !stats_.lcpTooLarge;
 }
 
-void ContactSolver::prepare(std::vector<ContactManifold>& contacts, Real h) {
+void ContactSolver::prepare(std::vector<ContactManifold>& contacts, const std::vector<Joint*>& joints, Real h) {
     rows_.clear();
     stats_ = {};
     h_ = h;
+    joints_ = joints;
+    const JointSettings js{settings.baumgarte, settings.jointMaxCorrection};
+    for (Joint* j : joints_)
+        j->prepare(h, js);
     for (ContactManifold& m : contacts) {
         RigidBody& a = *m.a;
         RigidBody& b = *m.b;
@@ -106,6 +110,8 @@ void ContactSolver::solveVelocities() {
             r.target = std::min(push, settings.maxPushVelocity);
         }
     }
+    for (Joint* j : joints_)
+        j->warmStart();
     if (!useLcp()) {
         for (Row& r : rows_) {
             if (!settings.warmStart) {
@@ -114,13 +120,13 @@ void ContactSolver::solveVelocities() {
             }
             applyRowImpulse(r, r.n * *r.impulse + r.t1 * r.lt1 + r.t2 * r.lt2);
         }
-        sequentialImpulses(true);
+        sequentialImpulses(true, true, true);
     } else {
         for (Row& r : rows_) {
             *r.impulse = 0; // the LCP gives the whole impulse
             r.lt1 = r.lt2 = 0;
         }
-        baraffWithFriction();
+        baraffWithFriction(true);
     }
     storeFriction();
 }
@@ -139,7 +145,7 @@ Real ContactSolver::updateAnchors(Row& r) const {
 }
 
 void ContactSolver::relax() {
-    if (rows_.empty()) return;
+    if (rows_.empty() && joints_.empty()) return;
 
     if (settings.relax) {
         // Same constraints at the new positions, without the push-out: v_n >= 0
@@ -149,7 +155,7 @@ void ContactSolver::relax() {
             r.target = depth < 0 ? depth / h_ : 0;
         }
         if (!useLcp()) {
-            sequentialImpulses(true); // clamping the accumulated impulses lets them shrink again
+            sequentialImpulses(true, true, false); // clamping the accumulated impulses lets them shrink again
         } else {
             for (Row& r : rows_) {
                 applyRowImpulse(r,
@@ -157,7 +163,7 @@ void ContactSolver::relax() {
                 *r.impulse = 0;
                 r.lt1 = r.lt2 = 0;
             }
-            baraffWithFriction();
+            baraffWithFriction(false);
         }
     }
 
@@ -174,7 +180,7 @@ void ContactSolver::relax() {
     }
     if (bounce) {
         if (!useLcp())
-            sequentialImpulses(false);
+            sequentialImpulses(false, false, false);
         else
             baraffLcp(false);
     }
@@ -219,8 +225,11 @@ void ContactSolver::storeFriction() {
 /// Projected Gauss-Seidel: solve one row at a time with the others fixed,
 /// clamping the accumulated impulse (not the increment). Friction first: the
 /// normal rows come last so non-penetration is what holds best.
-void ContactSolver::sequentialImpulses(bool withFriction) {
+void ContactSolver::sequentialImpulses(bool withFriction, bool withJoints, bool useBias) {
     for (int it = 0; it < settings.iterations; ++it) {
+        if (withJoints)
+            for (Joint* j : joints_)
+                j->solve(useBias);
         for (Row& r : rows_) {
             if (withFriction) solveFriction(r);
             Real dLambda = (r.target - normalVelocity(r)) * r.invK;
@@ -231,21 +240,30 @@ void ContactSolver::sequentialImpulses(bool withFriction) {
     }
 }
 
-/// Staggered projections: exact LCP for the normal impulses with friction held
-/// fixed, then friction with the normal impulses held fixed, repeated.
-void ContactSolver::baraffWithFriction() {
-    const bool friction = settings.friction;
-    const int rounds = friction ? std::max(settings.staggers, 1) : 1;
+/// Staggered projections: exact LCP for the normal impulses with friction and
+/// joints held fixed, then friction and joint passes with the normal impulses
+/// held fixed, repeated. (Joints are equalities, which the pivoting method for
+/// inequalities doesn't handle, so they are solved like friction.)
+void ContactSolver::baraffWithFriction(bool useBias) {
+    const bool friction = settings.friction && !rows_.empty();
+    const bool joints = !joints_.empty();
+    const int rounds = friction || joints ? std::max(settings.staggers, 1) : 1;
     for (int k = 0; k < rounds; ++k) {
-        for (Row& r : rows_) { // replace the normal impulses, keep friction
-            applyRowImpulse(r, r.n * -*r.impulse);
-            *r.impulse = 0;
+        if (!rows_.empty()) {
+            for (Row& r : rows_) { // replace the normal impulses, keep friction
+                applyRowImpulse(r, r.n * -*r.impulse);
+                *r.impulse = 0;
+            }
+            baraffLcp(true);
         }
-        baraffLcp(true);
-        if (!friction) break;
-        for (int it = 0; it < settings.iterations; ++it)
-            for (Row& r : rows_)
-                solveFriction(r);
+        if (!friction && !joints) break;
+        for (int it = 0; it < settings.iterations; ++it) {
+            for (Joint* jt : joints_)
+                jt->solve(useBias);
+            if (friction)
+                for (Row& r : rows_)
+                    solveFriction(r);
+        }
     }
 }
 

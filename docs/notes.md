@@ -227,3 +227,57 @@ rigid bodies.
 The cannon is drawn only and isn't a physics body. Scenes can now set their own substeps,
 camera, overlays, an action (here "Fire", key F, run automatically at t = 1 s) and extra
 drawing.
+
+## Springs, dampers and joints (milestone 5)
+
+**Springs** (`physics/forces/spring.h`) are forces, not constraints:
+f = (k(|d| − L₀) + c·(v_rel·d̂))·d̂ between two attachment points. They are re-evaluated in
+every substep, and work with every integrator, including RK4 in the free-motion scenes.
+Tested: equilibrium stretch m·g/k, period 2π√(m/k) with both semi-implicit Euler and RK4,
+and no overshoot with critical damping c = 2√(km).
+
+**Joints** (`physics/joints/joint.*`) are velocity-level constraint rows, solved by
+sequential impulses in the same passes as the contacts, joints first in each pass.
+They get the same soft step: Baumgarte position correction (capped at 2 m/s) while solving
+velocities, then a relax pass without it.
+- **Ball joint**: anchor points coincide. 3 rows solved together as one 3×3 block with
+  K = (1/m_a + 1/m_b)·I − [r_a]× I_a⁻¹ [r_a]× − [r_b]× I_b⁻¹ [r_b]×.
+- **Hinge**: a ball joint, plus 2 angular rows that keep the axes aligned (a 2×2 block),
+  plus optional angle limits and a motor about the axis. The limits work like speculative
+  contacts: the joint may approach a limit by the remaining angle, and is pushed back past
+  it. The motor drives the relative spin toward a target speed with at most the maximum torque.
+- **Slider**: relative rotation locked (3×3 block), no motion across the axis (2 rows), and
+  optional limits and motor along the axis.
+- `World::ground()` is a static anchor for attaching joints and springs to the world. Bodies
+  connected by a joint don't collide with each other (like Box2D's default
+  `collideConnected = false`): a chain's links touch at their joints.
+- **With the Baraff LCP:** joints are equalities, and the pivoting method handles
+  inequalities. So in LCP mode joints are solved like friction, in the passes between the
+  exact LCP solves for the contact normals.
+- The free-motion integrators (Euler, RK4, ...) ignore joints, as they ignore contacts.
+
+Tested:
+- pendulum periods within 0.3% (a ball on a ball joint, and a bar on a hinge as a physical
+  pendulum, including the finite-amplitude correction);
+- a hinge removing off-axis spin;
+- a chain's top joint carrying the whole weight of 10 links;
+- a door stopping at its 90° limit;
+- a motor's spin-up rate τ/I and its target speed;
+- a slider following its axis, stopping at its limit, and driven back up by its motor;
+- a hinged flap resting on a box (joints and contacts together).
+
+A test that was wrong taught something: spinning a door about its *centre* when the hinge is
+at its edge gives 3·I_cm/I_hinge = 0.75 rad/s after the first step, not 3 rad/s. Angular
+momentum about the hinge is conserved.
+
+**Two lessons from the demo scenes:**
+- **Newton's cradle with 1 mm gaps doesn't work.** The gaps are smaller than the 2 cm contact
+  margin, so in the step of the first impact all five balls are in (speculative) contact.
+  The solver resolves them together as one inelastic chain: the last ball gets 1.6 instead
+  of 2.3 m/s and the others keep moving. Real cradles work because the collisions happen
+  one after another. With 3 cm gaps each impact is a separate two-ball collision: the last
+  ball gets 98% of the ideal speed and the others nearly stop (tested).
+- **A box standing on four compression springs tips over.** A spring only pushes along its
+  own line and has no sideways stiffness, so a tilted box makes the springs buckle. Real
+  suspensions guide their springs. The demo crate hangs from its springs instead and settles
+  exactly at the predicted height.

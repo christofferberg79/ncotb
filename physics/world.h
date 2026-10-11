@@ -2,7 +2,9 @@
 
 #include "body/rigid_body.h"
 #include "collision/collide.h"
+#include "forces/spring.h"
 #include "integration/integrator.h"
+#include "joints/joint.h"
 #include "solver/contact_solver.h"
 
 #include <memory>
@@ -21,20 +23,40 @@ public:
     IntegratorType integrator = IntegratorType::SemiImplicitEuler;
 
     RigidBody& addBody(const Shape& shape, Real mass);
-    /// Removes all bodies; settings (gravity, integrator) are kept.
+    /// Removes all bodies, joints and springs; settings (gravity, integrator) are kept.
     void clear() {
-        bodies_.clear();
+        joints_.clear();
+        springs_.clear();
         contacts_.clear();
         cache_.clear();
+        bodies_.clear();
         time_ = 0;
     }
 
+    /// A static body at the origin to attach joints and springs to the world.
+    /// It takes part in no collisions and isn't in bodies().
+    RigidBody& ground() { return ground_; }
+
+    // Joints: anchor (and axis) in world space, at the bodies' current poses.
+    BallJoint& addBallJoint(RigidBody& a, RigidBody& b, const Vec3& anchor);
+    HingeJoint& addHinge(RigidBody& a, RigidBody& b, const Vec3& anchor, const Vec3& axis);
+    SliderJoint& addSlider(RigidBody& a, RigidBody& b, const Vec3& anchor, const Vec3& axis);
+    const std::vector<std::unique_ptr<Joint>>& joints() const { return joints_; }
+
+    /// Spring with damper between world points pa (on a) and pb (on b), at the
+    /// bodies' current poses. restLength < 0: the current distance.
+    Spring& addSpring(RigidBody& a, const Vec3& pa, RigidBody& b, const Vec3& pb, Real stiffness,
+                      Real damping, Real restLength = -1);
+    const std::vector<Spring>& springs() const { return springs_; }
+
     /// Advance the simulation by one fixed step h.
     ///
-    /// With semi-implicit Euler, contacts are resolved: each of the substeps
-    /// integrates forces into velocities, detects contacts, solves the contact
-    /// impulses and then moves the bodies with the new velocities. The other
-    /// integrators only move bodies freely (contacts are detected for display).
+    /// With semi-implicit Euler, contacts and joints are resolved: each of the
+    /// substeps integrates forces (gravity, springs, forces added to the bodies
+    /// before the step) into velocities, detects contacts, solves the contact
+    /// and joint impulses and then moves the bodies with the new velocities. The
+    /// other integrators move bodies freely under the forces, springs included
+    /// (contacts are detected for display, joints are ignored).
     void step(Real h);
 
     /// Contact solver and its settings (solver type, iterations, Baumgarte, ...).
@@ -46,7 +68,8 @@ public:
     /// Length of the last (sub)step; contact force = impulse / lastSubstep().
     Real lastSubstep() const { return lastSubstep_; }
 
-    /// Brute-force contact detection over all pairs with at least one dynamic body.
+    /// Brute-force contact detection over all pairs with at least one dynamic body,
+    /// except pairs connected by a joint (a joint decides how they meet).
     /// In each manifold a is dynamic (b may be static).
     void detectCollisions();
     /// Contacts found by the last detectCollisions() (or step()).
@@ -68,7 +91,7 @@ public:
     void derivative(Real t, Real* dydt) override;
 
 private:
-    /// Accumulates external forces and torques (gravity for now) on all bodies.
+    /// Accumulates gravity and spring forces on all bodies.
     void applyForces(Real t);
     void stepSemiImplicitEuler(Real h);
     static void integratePosition(RigidBody& b, Real h);
@@ -84,7 +107,11 @@ private:
         Vec3 tangentImpulse;
     };
 
+    RigidBody ground_{Shape::sphere(0), 0};
     std::vector<std::unique_ptr<RigidBody>> bodies_;
+    std::vector<std::unique_ptr<Joint>> joints_;
+    std::vector<Spring> springs_;
+    std::vector<Vec3> userForce_, userTorque_; ///< forces added before step(), per body
     std::vector<ContactManifold> contacts_;
     std::vector<CachedPoint> cache_;
     Real lastSubstep_ = 0;

@@ -9,6 +9,34 @@ RigidBody& World::addBody(const Shape& shape, Real mass) {
     return *bodies_.back();
 }
 
+BallJoint& World::addBallJoint(RigidBody& a, RigidBody& b, const Vec3& anchor) {
+    joints_.push_back(std::make_unique<BallJoint>(a, b, anchor));
+    return static_cast<BallJoint&>(*joints_.back());
+}
+
+HingeJoint& World::addHinge(RigidBody& a, RigidBody& b, const Vec3& anchor, const Vec3& axis) {
+    joints_.push_back(std::make_unique<HingeJoint>(a, b, anchor, axis));
+    return static_cast<HingeJoint&>(*joints_.back());
+}
+
+SliderJoint& World::addSlider(RigidBody& a, RigidBody& b, const Vec3& anchor, const Vec3& axis) {
+    joints_.push_back(std::make_unique<SliderJoint>(a, b, anchor, axis));
+    return static_cast<SliderJoint&>(*joints_.back());
+}
+
+Spring& World::addSpring(RigidBody& a, const Vec3& pa, RigidBody& b, const Vec3& pb, Real stiffness,
+                         Real damping, Real restLength) {
+    Spring s{&a,
+             &b,
+             transpose(a.R()) * (pa - a.x),
+             transpose(b.R()) * (pb - b.x),
+             restLength >= 0 ? restLength : length(pb - pa),
+             stiffness,
+             damping};
+    springs_.push_back(s);
+    return springs_.back();
+}
+
 void World::step(Real h) {
     if (integrator == IntegratorType::SemiImplicitEuler) {
         stepSemiImplicitEuler(h);
@@ -24,6 +52,11 @@ void World::step(Real h) {
 
 void World::detectCollisions() {
     contacts_.clear();
+    auto joined = [&](const RigidBody* a, const RigidBody* b) {
+        for (const auto& j : joints_)
+            if ((&j->bodyA() == a && &j->bodyB() == b) || (&j->bodyA() == b && &j->bodyB() == a)) return true;
+        return false;
+    };
     ContactManifold m;
     for (size_t i = 0; i < bodies_.size(); ++i) {
         for (size_t j = i + 1; j < bodies_.size(); ++j) {
@@ -33,6 +66,7 @@ void World::detectCollisions() {
             // Cheap rejection with bounding spheres before the exact test.
             Real reach = a.shape().boundingRadius() + b.shape().boundingRadius() + contactMargin;
             if (lengthSquared(a.x - b.x) > reach * reach) continue;
+            if (!joints_.empty() && joined(&a, &b)) continue;
             // Keep the dynamic body as a, so normals point away from static geometry.
             bool hit = a.isStatic() ? collide(b, a, m, contactMargin) : collide(a, b, m, contactMargin);
             if (hit) contacts_.push_back(m);
@@ -43,14 +77,35 @@ void World::detectCollisions() {
 void World::applyForces(Real /*t*/) {
     for (auto& b : bodies_)
         if (!b->isStatic()) b->addForce(gravity * b->mass());
+    for (const Spring& s : springs_)
+        s.applyForces();
 }
 
 void World::stepSemiImplicitEuler(Real h) {
-    applyForces(time_); // forces are held constant over the substeps
+    // Forces added to the bodies before the step are held over the substeps;
+    // gravity and springs are evaluated again in every substep.
+    userForce_.resize(bodies_.size());
+    userTorque_.resize(bodies_.size());
+    for (size_t i = 0; i < bodies_.size(); ++i) {
+        userForce_[i] = bodies_[i]->force;
+        userTorque_[i] = bodies_[i]->torque;
+    }
     const int n = std::max(substeps, 1);
     const Real hs = h / n;
     lastSubstep_ = hs;
+    std::vector<ContactManifold> noContacts;
+    std::vector<Joint*> joints;
+    joints.reserve(joints_.size());
+    for (auto& j : joints_)
+        joints.push_back(j.get());
+
     for (int sub = 0; sub < n; ++sub) {
+        for (size_t i = 0; i < bodies_.size(); ++i) {
+            bodies_[i]->force = userForce_[i];
+            bodies_[i]->torque = userTorque_[i];
+        }
+        applyForces(time_ + sub * hs);
+
         // Semi-implicit (symplectic) Euler: update momenta first, ...
         for (auto& body : bodies_) {
             RigidBody& b = *body;
@@ -61,23 +116,19 @@ void World::stepSemiImplicitEuler(Real h) {
             b.updateDerived();
         }
 
-        // ... let the contact solver correct the velocities ...
+        // ... let the solver correct the velocities (contacts and joints) ...
         detectCollisions();
-        if (resolveContacts) {
-            warmStartFromCache();
-            solver.prepare(contacts_, hs);
-            solver.solveVelocities();
-        }
+        if (resolveContacts) warmStartFromCache();
+        solver.prepare(resolveContacts ? contacts_ : noContacts, joints, hs);
+        solver.solveVelocities();
 
         // ... then move the bodies with the new velocities ...
         for (auto& body : bodies_)
             if (!body->isStatic()) integratePosition(*body, hs);
 
-        // ... and remove the push-out velocity again, then bounce.
-        if (resolveContacts) {
-            solver.relax();
-            updateCache();
-        }
+        // ... and remove the correction velocity again, then bounce.
+        solver.relax();
+        if (resolveContacts) updateCache();
     }
 }
 

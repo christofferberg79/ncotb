@@ -1,6 +1,7 @@
 #pragma once
 
 #include "collision/collide.h"
+#include "joints/joint.h"
 #include "math/quat.h"
 
 #include <vector>
@@ -30,6 +31,7 @@ struct ContactSettings {
     /// Baraff LCP: above this many contact points the step uses sequential impulses
     /// instead. Each pivot solves a dense system, so cost grows like rows^4.
     int lcpMaxRows = 300;
+    Real jointMaxCorrection = 2.0; ///< joints: cap on the position-correction velocity
 };
 
 struct ContactSolverStats {
@@ -65,8 +67,9 @@ class ContactSolver {
 public:
     ContactSettings settings;
 
-    /// Builds one row per contact point. Impulses are stored in the contact points.
-    void prepare(std::vector<ContactManifold>& contacts, Real h);
+    /// Builds one row per contact point (impulses are stored in the contact
+    /// points) and prepares the joints, which are solved in the same passes.
+    void prepare(std::vector<ContactManifold>& contacts, const std::vector<Joint*>& joints, Real h);
     void solveVelocities();
     void relax();
 
@@ -102,12 +105,15 @@ private:
     void storeFriction();
     /// The solver actually used this step (Baraff LCP falls back when too large).
     bool useLcp() const;
-    void sequentialImpulses(bool withFriction);
+    /// One phase of Gauss-Seidel passes: joints first, then each contact point's
+    /// friction and normal rows. useBias: joints also correct position errors.
+    void sequentialImpulses(bool withFriction, bool withJoints, bool useBias);
     void baraffLcp(bool replace);
-    /// LCP for the normals, alternating with friction passes when friction is on.
-    void baraffWithFriction();
+    /// LCP for the normals, alternating with friction and joint passes.
+    void baraffWithFriction(bool useBias);
 
     std::vector<Row> rows_;
+    std::vector<Joint*> joints_;
     Real h_ = 0;
     ContactSolverStats stats_;
 };

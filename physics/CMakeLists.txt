@@ -2,6 +2,7 @@ add_library(physics STATIC
   body/rigid_body.cpp
   collision/collide.cpp
   integration/integrator.cpp
+  joints/joint.cpp
   solver/contact_solver.cpp
   solver/lcp.cpp
   world.cpp)

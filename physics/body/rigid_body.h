@@ -59,6 +59,13 @@ public:
         omega_ += Iinv_ * dL;
     }
 
+    /// Apply an angular impulse (a torque times a time step): L += J.
+    void applyAngularImpulse(const Vec3& J) {
+        if (isStatic()) return;
+        L += J;
+        omega_ += Iinv_ * J;
+    }
+
     /// Recompute R, I^-1, v and omega from the state variables.
     void updateDerived();
 

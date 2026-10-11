@@ -118,6 +118,47 @@ void drawContacts(const std::vector<ContactManifold>& contacts, bool normals, Re
     }
 }
 
+/// Joints: anchors (dark), lines from the bodies' centres to them (grey), hinge
+/// axes (blue) and slider axes (purple).
+void drawJoints(const World& world) {
+    for (const auto& jp : world.joints()) {
+        const Joint& j = *jp;
+        Vec3 pa = j.anchorA(), pb = j.anchorB();
+        for (const RigidBody* b : {&j.bodyA(), &j.bodyB()})
+            if (!b->isStatic()) DrawLine3D(toRl(b->x), toRl(b == &j.bodyA() ? pa : pb), {90, 90, 100, 255});
+        DrawSphere(toRl(pa), 0.035f, {40, 40, 50, 255});
+        if (auto* h = dynamic_cast<const HingeJoint*>(&j)) {
+            Vec3 n = h->axis() * 0.3;
+            DrawLine3D(toRl(pa - n), toRl(pa + n), {40, 90, 220, 255});
+        } else if (auto* s = dynamic_cast<const SliderJoint*>(&j)) {
+            Vec3 n = s->axis();
+            Real lo = s->hasLimits() ? s->lowerLimit() : -1, hi = s->hasLimits() ? s->upperLimit() : 1;
+            DrawLine3D(toRl(pa + n * lo), toRl(pa + n * hi), {150, 70, 200, 255});
+        }
+    }
+}
+
+/// Springs as coils: 10 turns around the line between the anchors.
+void drawSprings(const World& world) {
+    for (const Spring& sp : world.springs()) {
+        Vec3 pa = sp.anchorA(), pb = sp.anchorB(), d = pb - pa;
+        Real len = length(d);
+        if (len < 1e-6) continue;
+        Vec3 n = d / len;
+        Vec3 u = normalize(cross(n, std::abs(n.x) < 0.57 ? Vec3{1, 0, 0} : Vec3{0, 1, 0})), v = cross(n, u);
+        const int segments = 120;
+        const Real radius = 0.06;
+        Vec3 prev = pa;
+        for (int i = 1; i <= segments; ++i) {
+            Real t = Real(i) / segments, phi = t * 10 * 2 * M_PI;
+            Real r = (i < 4 || i > segments - 4) ? 0 : radius; // straight ends
+            Vec3 p = pa + d * t + (u * std::cos(phi) + v * std::sin(phi)) * r;
+            DrawLine3D(toRl(prev), toRl(p), {60, 60, 70, 255});
+            prev = p;
+        }
+    }
+}
+
 // ---------------------------------------------------------------- scenes
 
 struct Scene {
@@ -133,8 +174,9 @@ struct Scene {
     bool showContacts = true;            ///< default for the contact overlay
     const char* actionLabel = nullptr;   ///< e.g. "Fire": a button and the F key
     std::function<void(World&)> action{};
-    Real autoActionAt = -1;           ///< run the action once at this time (s)
-    std::function<void()> decorate{}; ///< extra drawing (in 3D mode), not physics
+    Real autoActionAt = -1;               ///< run the action once at this time (s)
+    std::function<void()> decorate{};     ///< extra drawing (in 3D mode), not physics
+    std::function<void(World&)> update{}; ///< called after every step (scripted motors etc.)
 };
 
 /// Body colours are packed into RigidBody::userData as 0xRRGGBBAA.
@@ -350,6 +392,132 @@ const std::vector<Scene>& scenes() {
          .action = fireCannon,
          .autoActionAt = 1.0,
          .decorate = drawCannon},
+        {.name = "Pendulums: simple, chain, double, Newton's cradle",
+         .contacts = true,
+         .build =
+             [](World& w) {
+                 w.gravity = {0, -9.81, 0};
+                 // Simple pendulum: a ball on a ball joint, released at 40 degrees.
+                 const Vec3 p1{-4.5, 4, 0};
+                 RigidBody& bob =
+                     place(w, Shape::sphere(0.2), 1, p1 + Vec3{1.5 * std::sin(0.7), -1.5 * std::cos(0.7), 0});
+                 w.addBallJoint(w.ground(), bob, p1);
+                 // Chain of 8 links hanging from a point, started sideways.
+                 const Vec3 p2{-1.8, 4, 0};
+                 RigidBody* prev = &w.ground();
+                 for (int i = 0; i < 8; ++i) {
+                     RigidBody& link =
+                         place(w, Shape::box({0.15, 0.04, 0.04}), 0.4, p2 + Vec3{0.3 * i + 0.15, 0, 0});
+                     w.addBallJoint(*prev, link, p2 + Vec3{0.3 * i, 0, 0});
+                     prev = &link;
+                 }
+                 // Double pendulum: two bars on hinges (chaotic).
+                 const Vec3 p3{1.2, 4, 0};
+                 Quat tilt = Quat::fromAxisAngle({0, 0, 1}, 2.2);
+                 Vec3 down = rotate(tilt, {0, -1, 0});
+                 RigidBody& upper = place(w, Shape::box({0.04, 0.4, 0.04}), 1, p3 + down * 0.4, tilt);
+                 w.addHinge(w.ground(), upper, p3, {0, 0, 1});
+                 RigidBody& lower = place(w, Shape::box({0.04, 0.4, 0.04}), 1, p3 + down * 1.2, tilt);
+                 w.addHinge(upper, lower, p3 + down * 0.8, {0, 0, 1});
+                 // Newton's cradle: 5 elastic balls, the first raised. The 3 cm gaps
+                 // are wider than the contact margin, so each impact is a separate
+                 // two-ball collision (see docs/notes.md: with 1 mm gaps the solver
+                 // treats the five as one inelastic chain).
+                 const Real r = 0.2, gap = 0.03, len = 1.6;
+                 for (int i = 0; i < 5; ++i) {
+                     Vec3 pivot{4 + i * (2 * r + gap), 4, 0};
+                     Real a = i == 0 ? -0.6 : 0;
+                     RigidBody& ball = place(w, Shape::sphere(r), 1,
+                                             pivot + Vec3{len * std::sin(a), -len * std::cos(a), 0});
+                     ball.restitution = 1;
+                     ball.friction = 0;
+                     ball.userData = packColor(190, 195, 205);
+                     w.addBallJoint(w.ground(), ball, pivot);
+                 }
+             },
+         .camera = OrbitCamera{.yaw = 0.2f, .pitch = 0.12f, .distance = 14.0f, .target = {-1.2f, 2.6f, 0}},
+         .showVectors = false},
+        {.name = "Springs and dampers",
+         .contacts = true,
+         .build =
+             [](World& w) {
+                 w.gravity = {0, -9.81, 0};
+                 w.addBody(Shape::plane(), 0);
+                 // Three masses dropped from the springs' rest length: no damping,
+                 // light damping and critical damping (c = 2 sqrt(k m)).
+                 const Real k = 60, m = 1;
+                 const Real dampings[3] = {0, 1.5, 2 * std::sqrt(k * m)};
+                 for (int i = 0; i < 3; ++i) {
+                     Vec3 top{-3.5 + i * 1.0, 4.5, 0};
+                     RigidBody& mass = place(w, Shape::box({0.15, 0.15, 0.15}), m, top - Vec3{0, 1.2, 0});
+                     w.addSpring(w.ground(), top, mass, mass.x + Vec3{0, 0.15, 0}, k, dampings[i], 1.05);
+                 }
+                 // A crate hanging from four springs, released from their rest
+                 // length. (Standing on compression springs it would tip over:
+                 // springs only push along their own line, with no sideways
+                 // stiffness, which is why real suspensions guide them.)
+                 const Vec3 h{0.8, 0.15, 0.5};
+                 RigidBody& crate =
+                     place(w, Shape::box(h), 20, {2.2, 2.05, 0}, Quat::fromAxisAngle({1, 0, 0}, 0.1));
+                 crate.userData = packColor(170, 130, 80);
+                 const Real ks = 330, cs = 25; // static stretch m g / 4k = 0.15 m, damping ratio ~0.3
+                 for (int sx : {-1, 1})
+                     for (int sz : {-1, 1}) {
+                         Vec3 corner = crate.x + crate.R() * Vec3{sx * h.x, h.y, sz * h.z};
+                         w.addSpring(crate, corner, w.ground(), {2.2 + sx * h.x, 3.2, sz * h.z}, ks, cs, 1.0);
+                     }
+             },
+         .camera = OrbitCamera{.yaw = 0.35f, .pitch = 0.18f, .distance = 11.0f, .target = {-0.5f, 2.2f, 0}},
+         .showVectors = false},
+        {.name = "Hinges and sliders (F: throw a ball at the door)",
+         .contacts = true,
+         .build =
+             [](World& w) {
+                 w.gravity = {0, -9.81, 0};
+                 w.addBody(Shape::plane(), 0);
+                 // Door: hinged on its left edge, opens up to 100 degrees either way.
+                 RigidBody& door = place(w, Shape::box({0.45, 1.0, 0.03}), 15, {-3.05, 1.02, 0});
+                 door.userData = packColor(150, 110, 70);
+                 w.addHinge(w.ground(), door, {-3.5, 1.02, 0}, {0, 1, 0}).setLimits(-1.75, 1.75);
+                 // Turntable: a disc driven at 0.8 rad/s, carrying three boxes.
+                 RigidBody& table = place(w, Shape::box({1.2, 0.05, 1.2}), 40, {0.5, 0.35, 0});
+                 table.userData = packColor(120, 125, 135);
+                 w.addHinge(w.ground(), table, table.x, {0, 1, 0}).setMotor(0.8, 400);
+                 place(w, Shape::box({0.2, 0.15, 0.2}), 0, {0.5, 0.15, 0}); // pedestal under the disc
+                 for (int i = 0; i < 3; ++i) {
+                     Real a = i * 2.1;
+                     place(w, Shape::box({0.15, 0.15, 0.15}), 1,
+                           {0.5 + 0.8 * std::cos(a), 0.55, 0.8 * std::sin(a)})
+                         .friction = 0.8;
+                 }
+                 // Elevator: a platform on a vertical slider moving between 0 and 2 m.
+                 RigidBody& platform = place(w, Shape::box({0.6, 0.05, 0.6}), 30, {3.5, 0.3, 0});
+                 platform.userData = packColor(120, 125, 135);
+                 SliderJoint& lift = w.addSlider(w.ground(), platform, platform.x, {0, 1, 0});
+                 lift.setLimits(0, 2);
+                 lift.setMotor(0.6, 2000);
+                 place(w, Shape::box({0.2, 0.2, 0.2}), 2, {3.5, 0.55, 0}).friction = 0.8;
+             },
+         .camera = OrbitCamera{.yaw = 0.55f, .pitch = 0.3f, .distance = 11.0f, .target = {0.2f, 0.9f, 0}},
+         .showVectors = false,
+         .actionLabel = "Throw ball",
+         .action =
+             [](World& w) {
+                 RigidBody& ball = place(w, Shape::sphere(0.15), 3, {-2.7, 1.3, 4});
+                 ball.userData = packColor(40, 42, 48);
+                 ball.setLinearVelocity({0, 1.5, -9});
+             },
+         .update =
+             [](World& w) {
+                 // Reverse the elevator at the ends of its travel.
+                 for (const auto& j : w.joints())
+                     if (auto* s = dynamic_cast<SliderJoint*>(j.get())) {
+                         if (s->position() > s->upperLimit() - 0.01 && s->motorSpeed() > 0)
+                             s->setMotor(-s->motorSpeed(), s->maxMotorForce());
+                         if (s->position() < s->lowerLimit() + 0.01 && s->motorSpeed() < 0)
+                             s->setMotor(-s->motorSpeed(), s->maxMotorForce());
+                     }
+             }},
         {"Restitution (e = 0, 0.25, 0.5, 0.75, 1)", true,
          [](World& w) {
              w.gravity = {0, -9.81, 0};
@@ -436,6 +604,7 @@ struct App {
         world.step(h);
         recordHistory();
         const Scene& scene = scenes()[sceneIndex];
+        if (scene.update) scene.update(world);
         if (!autoActionDone && scene.action && scene.autoActionAt >= 0 &&
             world.time() >= scene.autoActionAt) {
             autoActionDone = true;
@@ -727,6 +896,8 @@ int main() {
             }
         }
         if (const auto& decorate = scenes()[app.sceneIndex].decorate) decorate();
+        drawJoints(app.world);
+        drawSprings(app.world);
         // Translucent planes last and without depth writes, so bodies that sink
         // below them stay visible.
         rlDrawRenderBatchActive();

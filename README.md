@@ -39,6 +39,8 @@ physics/   simulation library (no graphics dependency)
   integration/  Euler, Midpoint, Heun, RK4 for any OdeSystem
   collision/    sphere/box/plane contact manifolds
   solver/       contact solvers with friction: sequential impulses, Baraff LCP
+  joints/       ball, hinge (limits, motor), slider (limits, motor)
+  forces/       springs with dampers
   world.*  World: owns bodies, fixed-step integration
 app/       raylib + ImGui front-end, scenes
 tests/     doctest unit tests
@@ -53,7 +55,7 @@ docs/      notes
 - [x] 2. Collision detection: sphere/plane/box, contact manifolds
 - [x] 3. Contacts: collisions + resting contact (Sequential Impulses / PGS, plus Baraff's LCP for comparison)
 - [x] 4. Friction
-- [ ] 5. Springs, dampers, joints (ball, hinge, slider)
+- [x] 5. Springs, dampers, joints (ball, hinge, slider)
 - [ ] 6. Interaction: mouse picking/dragging, impulses, spawning
 - [ ] 7. Heightfield terrain
 - [ ] 8. Drivable vehicle
