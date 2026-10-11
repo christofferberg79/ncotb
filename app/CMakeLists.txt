@@ -1,4 +1,4 @@
-add_executable(ncotb main.cpp)
+add_executable(ncotb main.cpp app.cpp draw.cpp scenes.cpp)
 target_link_libraries(ncotb PRIVATE physics imgui raylib)
 target_compile_options(ncotb PRIVATE -Wall -Wextra)
 if(APPLE)
