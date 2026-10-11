@@ -27,12 +27,16 @@ struct ContactSettings {
     Real restitutionThreshold = 0.5; ///< no bounce below this approach speed (m/s)
     bool friction = true;            ///< Coulomb friction (two tangent rows per point)
     int staggers = 4;                ///< Baraff LCP with friction: normal/friction alternations
+    /// Baraff LCP: above this many contact points the step uses sequential impulses
+    /// instead. Each pivot solves a dense system, so cost grows like rows^4.
+    int lcpMaxRows = 300;
 };
 
 struct ContactSolverStats {
-    int rows = 0;           ///< contact points solved
-    int pivots = 0;         ///< Baraff LCP: pivots used
-    bool lcpFailed = false; ///< Baraff LCP: no solution found within the pivot limit
+    int rows = 0;             ///< contact points solved
+    int pivots = 0;           ///< Baraff LCP: pivots used
+    bool lcpFailed = false;   ///< Baraff LCP: no solution found within the pivot limit
+    bool lcpTooLarge = false; ///< Baraff LCP: too many rows, sequential impulses were used
 };
 
 /// Velocity-level contact solver. Each contact point is a constraint row
@@ -96,6 +100,8 @@ private:
     Real updateAnchors(Row& r) const;
     void solveFriction(Row& r) const;
     void storeFriction();
+    /// The solver actually used this step (Baraff LCP falls back when too large).
+    bool useLcp() const;
     void sequentialImpulses(bool withFriction);
     void baraffLcp(bool replace);
     /// LCP for the normals, alternating with friction passes when friction is on.

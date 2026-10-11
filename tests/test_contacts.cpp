@@ -292,3 +292,20 @@ TEST_CASE("a ball wider than the gap between two walls stays jammed and calm") {
         CHECK(length(ball.x) < 0.025);
     }
 }
+
+TEST_CASE("Baraff LCP falls back to sequential impulses for very large contact sets") {
+    World w = groundWorld(ContactSolverType::BaraffLcp);
+    w.solver.settings.lcpMaxRows = 8; // a 3-box stack has 12 contact points
+    std::vector<RigidBody*> boxes;
+    for (int i = 0; i < 3; ++i) {
+        RigidBody& b = w.addBody(Shape::box({0.5, 0.5, 0.5}), 1);
+        b.x = {0, 0.5 + 1.0 * i, 0};
+        b.updateDerived();
+        boxes.push_back(&b);
+    }
+    run(w, 1);
+    CHECK(w.solver.stats().lcpTooLarge);
+    CHECK_FALSE(w.solver.stats().lcpFailed);
+    CHECK(w.solver.stats().pivots == 0);
+    CHECK(length(boxes.back()->v()) < 1e-3);
+}

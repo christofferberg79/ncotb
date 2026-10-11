@@ -47,6 +47,10 @@ void ContactSolver::applyRowImpulse(const Row& r, const Vec3& J) const {
     r.b->applyImpulseAtOffset(-J, r.rb);
 }
 
+bool ContactSolver::useLcp() const {
+    return settings.type == ContactSolverType::BaraffLcp && !stats_.lcpTooLarge;
+}
+
 void ContactSolver::prepare(std::vector<ContactManifold>& contacts, Real h) {
     rows_.clear();
     stats_ = {};
@@ -90,6 +94,7 @@ void ContactSolver::prepare(std::vector<ContactManifold>& contacts, Real h) {
         }
     }
     stats_.rows = int(rows_.size());
+    stats_.lcpTooLarge = settings.type == ContactSolverType::BaraffLcp && stats_.rows > settings.lcpMaxRows;
 }
 
 void ContactSolver::solveVelocities() {
@@ -101,7 +106,7 @@ void ContactSolver::solveVelocities() {
             r.target = std::min(push, settings.maxPushVelocity);
         }
     }
-    if (settings.type == ContactSolverType::SequentialImpulses) {
+    if (!useLcp()) {
         for (Row& r : rows_) {
             if (!settings.warmStart) {
                 *r.impulse = 0;
@@ -143,7 +148,7 @@ void ContactSolver::relax() {
             Real depth = updateAnchors(r);
             r.target = depth < 0 ? depth / h_ : 0;
         }
-        if (settings.type == ContactSolverType::SequentialImpulses) {
+        if (!useLcp()) {
             sequentialImpulses(true); // clamping the accumulated impulses lets them shrink again
         } else {
             for (Row& r : rows_) {
@@ -168,7 +173,7 @@ void ContactSolver::relax() {
         }
     }
     if (bounce) {
-        if (settings.type == ContactSolverType::SequentialImpulses)
+        if (!useLcp())
             sequentialImpulses(false);
         else
             baraffLcp(false);

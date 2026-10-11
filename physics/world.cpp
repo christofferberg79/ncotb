@@ -30,6 +30,9 @@ void World::detectCollisions() {
             RigidBody& a = *bodies_[i];
             RigidBody& b = *bodies_[j];
             if (a.isStatic() && b.isStatic()) continue;
+            // Cheap rejection with bounding spheres before the exact test.
+            Real reach = a.shape().boundingRadius() + b.shape().boundingRadius() + contactMargin;
+            if (lengthSquared(a.x - b.x) > reach * reach) continue;
             // Keep the dynamic body as a, so normals point away from static geometry.
             bool hit = a.isStatic() ? collide(b, a, m, contactMargin) : collide(a, b, m, contactMargin);
             if (hit) contacts_.push_back(m);

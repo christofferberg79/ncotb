@@ -3,6 +3,8 @@
 #include "body/shape.h"
 #include "math/quat.h"
 
+#include <cstdint>
+
 namespace ncotb {
 
 /// A rigid body following Baraff's notation (Rigid Body Simulation I, section 2.9).
@@ -25,6 +27,9 @@ public:
     Real restitution = 0.3;
     /// Coulomb friction coefficient. A contact uses sqrt(mu_a mu_b).
     Real friction = 0.5;
+
+    /// Free for the application to use (the app stores a colour); ignored by the physics.
+    std::uintptr_t userData = 0;
 
     // --- force/torque accumulators (cleared after each step) ---
     Vec3 force{};

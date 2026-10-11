@@ -207,3 +207,23 @@ Results (both solvers, 240 Hz, 4 substeps):
 
 There's no rolling resistance, so a ball on flat ground rolls forever, which is correct for
 rigid bodies.
+
+## Cannon vs brick wall (stress scene)
+
+147 bricks in running bond and a 30 kg cannonball at 25 m/s. The wall alone has about
+1600 contact points, because bricks touch their neighbours on every side. Release build,
+240 steps/s:
+
+- **Collision detection** takes about 0.3 ms per substep. A bounding-sphere test now skips
+  far-apart pairs before the exact test; before, every one of the ~11,000 pairs went
+  through the full box–box test.
+- **Sequential impulses** take about 1.2 ms per substep. 2 substeps keep the scene real-time
+  (3.4 ms per 4.2 ms step); 4 would not (6.0 ms). The scene sets its own default.
+- **Baraff LCP** builds a dense matrix, and each pivot solves a dense system, so the cost
+  grows roughly with the 4th power of the number of contact points. That's fine for a few
+  dozen points, but hopeless for 1600: it would hang the app. Above `lcpMaxRows` (300) a step
+  uses sequential impulses instead, and the panel says so.
+
+The cannon is drawn only and isn't a physics body. Scenes can now set their own substeps,
+camera, overlays, an action (here "Fire", key F, run automatically at t = 1 s) and extra
+drawing.

@@ -18,6 +18,16 @@ struct Shape {
     static Shape box(const Vec3& halfExtents) { return {Type::Box, 0, halfExtents}; }
     static Shape plane() { return {Type::Plane, 0, {}}; }
 
+    /// Radius of a sphere around the centre that contains the shape (infinite for a plane).
+    Real boundingRadius() const {
+        switch (type) {
+        case Type::Sphere: return radius;
+        case Type::Box: return length(halfExtents);
+        case Type::Plane: return INFINITY;
+        }
+        return INFINITY;
+    }
+
     /// Inertia tensor in body space for a solid body of the given mass.
     Mat3 inertia(Real mass) const {
         if (type == Type::Plane) return {};

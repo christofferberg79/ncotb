@@ -12,6 +12,8 @@
 #include <cfloat>
 #include <cmath>
 #include <functional>
+#include <optional>
+#include <random>
 #include <string>
 #include <vector>
 
@@ -77,8 +79,8 @@ void drawBody(const RigidBody& b, Color color) {
         DrawSphereWires({0, 0, 0}, float(s.radius) * 1.002f, 8, 8, BLACK);
         break;
     case Shape::Type::Plane: {
-        // Infinite plane drawn as a 20 x 20 patch in the body's xz-plane.
-        const float half = 10;
+        // Infinite plane drawn as a 40 x 40 patch in the body's xz-plane.
+        const float half = 20;
         DrawPlane({0, -0.001f, 0}, {2 * half, 2 * half}, color);
         for (float t = -half; t <= half; t += 1) {
             DrawLine3D({-half, 0, t}, {half, 0, t}, {0, 0, 0, 40});
@@ -124,7 +126,100 @@ struct Scene {
     /// contacts) and show the contact solver settings.
     bool contacts;
     std::function<void(World&)> build;
+    // Optional:
+    int substeps = 0;                    ///< substeps for this scene (0: the slider's value)
+    std::optional<OrbitCamera> camera{}; ///< camera to start from
+    bool showVectors = true;             ///< default for the omega/L arrows
+    bool showContacts = true;            ///< default for the contact overlay
+    const char* actionLabel = nullptr;   ///< e.g. "Fire": a button and the F key
+    std::function<void(World&)> action{};
+    Real autoActionAt = -1;           ///< run the action once at this time (s)
+    std::function<void()> decorate{}; ///< extra drawing (in 3D mode), not physics
 };
+
+/// Body colours are packed into RigidBody::userData as 0xRRGGBBAA.
+std::uintptr_t packColor(int r, int g, int b) {
+    return (std::uintptr_t(r) << 24) | (std::uintptr_t(g) << 16) | (std::uintptr_t(b) << 8) | 0xff;
+}
+
+Color colorOf(const RigidBody& b, Color fallback) {
+    if (b.userData == 0) return fallback;
+    auto c = std::uint32_t(b.userData);
+    return {(unsigned char)(c >> 24), (unsigned char)(c >> 16), (unsigned char)(c >> 8), (unsigned char)c};
+}
+
+// ---------------------------------------------------------------- cannon scene
+
+/// The cannon fires from the muzzle at kCannonSpeed (horizontal), aimed so the
+/// ball's arc passes through kCannonTarget on the wall.
+constexpr Vec3 kMuzzle{0.3, 1.05, 13.0};
+constexpr Vec3 kCannonTarget{0.3, 1.7, 0};
+constexpr Real kCannonSpeed = 25;
+
+Vec3 cannonVelocity() {
+    Vec3 d = kCannonTarget - kMuzzle;
+    Real horizontal = std::hypot(d.x, d.z);
+    Real t = horizontal / kCannonSpeed;
+    Real vy = (d.y + 0.5 * 9.81 * t * t) / t; // rise so gravity brings it down onto the target
+    return {d.x / t, vy, d.z / t};
+}
+
+void drawCannon() {
+    const Vec3 dir = normalize(cannonVelocity());
+    const Vec3 breech = kMuzzle - dir * 2.4;
+    const Color iron{45, 47, 52, 255}, wood{110, 70, 40, 255};
+    DrawCylinderEx(toRl(breech), toRl(kMuzzle), 0.5f, 0.4f, 24, iron);
+    DrawCylinderWiresEx(toRl(kMuzzle - dir * 0.15), toRl(kMuzzle), 0.44f, 0.44f, 24, {20, 20, 22, 255});
+    DrawSphere(toRl(breech), 0.5f, iron);
+    // carriage and wheels
+    Vec3 axle = breech + dir * 0.9;
+    DrawCube({float(axle.x), 0.45f, float(axle.z)}, 0.8f, 0.3f, 2.2f, wood);
+    for (int side : {-1, 1}) {
+        ::Vector3 c{float(axle.x + side * 0.55), 0.6f, float(axle.z)};
+        ::Vector3 c2{c.x + side * 0.14f, c.y, c.z};
+        DrawCylinderEx(c, c2, 0.6f, 0.6f, 24, wood);
+        DrawCylinderWiresEx(c, c2, 0.6f, 0.6f, 12, {60, 35, 20, 255});
+    }
+}
+
+void fireCannon(World& w) {
+    RigidBody& ball = w.addBody(Shape::sphere(0.35), 30); // cast iron, about 30 kg
+    ball.x = kMuzzle;
+    ball.restitution = 0.2;
+    ball.friction = 0.4;
+    ball.userData = packColor(40, 42, 48);
+    ball.updateDerived();
+    ball.setLinearVelocity(cannonVelocity());
+}
+
+/// A wall in running bond: every other row is offset by half a brick, with half
+/// bricks at its ends.
+void buildBrickWall(World& w) {
+    w.gravity = {0, -9.81, 0};
+    RigidBody& ground = w.addBody(Shape::plane(), 0);
+    ground.friction = 0.8;
+    ground.restitution = 0.1;
+    const int cols = 10, rows = 14;
+    const Real L = 0.6, H = 0.24, D = 0.3, mass = 2.0;
+    std::mt19937 rng(42);
+    std::uniform_int_distribution<int> shade(-18, 18);
+    for (int r = 0; r < rows; ++r) {
+        const bool offset = r % 2 == 1;
+        const int n = offset ? cols + 1 : cols;
+        Real x = -cols * L / 2;
+        for (int i = 0; i < n; ++i) {
+            const Real len = offset && (i == 0 || i == n - 1) ? L / 2 : L;
+            RigidBody& b = w.addBody(Shape::box({len / 2, H / 2, D / 2}), mass * len / L);
+            b.x = {x + len / 2, H / 2 + r * H, 0};
+            b.friction = 0.7;
+            b.restitution = 0.05;
+            int s = shade(rng);
+            b.userData = packColor(160 + s, 62 + s / 2, 45 + s / 3);
+            b.updateDerived();
+            x += len;
+        }
+    }
+}
 
 /// Adds a dynamic body at x with orientation q.
 RigidBody& place(World& w, const Shape& shape, Real mass, const Vec3& x, const Quat& q = {}) {
@@ -244,6 +339,17 @@ const std::vector<Scene>& scenes() {
                  ball.restitution = 0;
              }
          }},
+        {.name = "Cannon vs brick wall (F: fire)",
+         .contacts = true,
+         .build = buildBrickWall,
+         .substeps = 2, // ~150 bricks and ~1600 contact points: 2 substeps keep it real-time
+         .camera = OrbitCamera{.yaw = 1.3f, .pitch = 0.3f, .distance = 20.0f, .target = {-2.5f, 1.2f, 6.0f}},
+         .showVectors = false,
+         .showContacts = false,
+         .actionLabel = "Fire",
+         .action = fireCannon,
+         .autoActionAt = 1.0,
+         .decorate = drawCannon},
         {"Restitution (e = 0, 0.25, 0.5, 0.75, 1)", true,
          [](World& w) {
              w.gravity = {0, -9.81, 0};
@@ -269,7 +375,9 @@ struct App {
     bool showNormals = false;
     float forceScale = 0.05f; ///< metres per newton for the force arrows (0: off)
     int contactSubsteps = 4;  ///< substeps in contact scenes
-    Vec3 sceneGravity{};      ///< the scene's own gravity, for the on/off switch
+    OrbitCamera orbit;
+    bool autoActionDone = false;
+    Vec3 sceneGravity{}; ///< the scene's own gravity, for the on/off switch
     double accumulator = 0;
 
     // "Move a body" editor: rotation is applied on top of the orientation the
@@ -289,6 +397,11 @@ struct App {
         sceneIndex = i;
         world.clear();
         const Scene& scene = scenes()[i];
+        if (scene.substeps > 0) contactSubsteps = scene.substeps;
+        if (scene.camera) orbit = *scene.camera;
+        showVectors = scene.showVectors;
+        showContacts = scene.showContacts;
+        autoActionDone = false;
         if (scene.contacts) {
             world.integrator = IntegratorType::SemiImplicitEuler;
             world.substeps = contactSubsteps;
@@ -319,21 +432,35 @@ struct App {
         historyPos = (historyPos + 1) % kHistory;
     }
 
+    void stepOnceNow(double h) {
+        world.step(h);
+        recordHistory();
+        const Scene& scene = scenes()[sceneIndex];
+        if (!autoActionDone && scene.action && scene.autoActionAt >= 0 &&
+            world.time() >= scene.autoActionAt) {
+            autoActionDone = true;
+            runAction();
+        }
+    }
+
+    void runAction() {
+        const Scene& scene = scenes()[sceneIndex];
+        if (!scene.action) return;
+        scene.action(world);
+        world.detectCollisions();
+    }
+
     void advance(double frameTime) {
         const double h = 1.0 / stepsPerSecond;
         if (paused) {
-            if (stepOnce) {
-                world.step(h);
-                recordHistory();
-            }
+            if (stepOnce) stepOnceNow(h);
             stepOnce = false;
             return;
         }
         accumulator += std::min(frameTime, 0.1) * timeScale;
         while (accumulator >= h) {
-            world.step(h);
+            stepOnceNow(h);
             accumulator -= h;
-            recordHistory();
         }
     }
 
@@ -352,6 +479,9 @@ struct App {
         ImGui::Checkbox("Paused (Space)", &paused);
         ImGui::SameLine();
         if (ImGui::Button("Step (S)")) stepOnce = true;
+        if (const char* label = scenes()[sceneIndex].actionLabel) {
+            if (ImGui::Button((std::string(label) + " (F)").c_str())) runAction();
+        }
 
         const bool contactScene = scenes()[sceneIndex].contacts;
         ImGui::BeginDisabled(contactScene);
@@ -439,7 +569,10 @@ struct App {
             ImGui::SliderInt("Normal/friction rounds", &cs.staggers, 1, 10);
         ImGui::Checkbox("Resolve contacts", &world.resolveContacts);
         const ContactSolverStats& st = world.solver.stats();
-        if (cs.type == ContactSolverType::BaraffLcp)
+        if (cs.type == ContactSolverType::BaraffLcp && st.lcpTooLarge)
+            ImGui::TextColored({1, 0.7f, 0.3f, 1}, "%d rows > %d: used sequential impulses", st.rows,
+                               cs.lcpMaxRows);
+        else if (cs.type == ContactSolverType::BaraffLcp)
             ImGui::Text("%d rows, %d pivots%s", st.rows, st.pivots, st.lcpFailed ? "  PIVOT LIMIT HIT" : "");
         else
             ImGui::Text("%d rows", st.rows);
@@ -559,7 +692,6 @@ int main() {
 
     App app;
     app.loadScene(0);
-    OrbitCamera orbit;
 
     const Color palette[] = {{230, 120, 70, 255}, {80, 150, 220, 255},  {120, 190, 100, 255},
                              {220, 190, 70, 255}, {170, 110, 200, 255}, {90, 200, 190, 255}};
@@ -567,32 +699,34 @@ int main() {
     while (!WindowShouldClose()) {
         bool mouseFree = !ImGui::GetIO().WantCaptureMouse;
         bool keysFree = !ImGui::GetIO().WantCaptureKeyboard;
-        orbit.update(mouseFree);
+        app.orbit.update(mouseFree);
         if (keysFree) {
             if (IsKeyPressed(KEY_SPACE)) app.paused = !app.paused;
             if (IsKeyPressed(KEY_S)) app.stepOnce = true;
             if (IsKeyPressed(KEY_R)) app.loadScene(app.sceneIndex);
+            if (IsKeyPressed(KEY_F)) app.runAction();
         }
 
         app.advance(GetFrameTime());
 
         BeginDrawing();
         ClearBackground({235, 238, 242, 255});
-        BeginMode3D(orbit.camera());
+        BeginMode3D(app.orbit.camera());
         DrawGrid(40, 1.0f);
         int i = 0;
         for (auto& b : app.world.bodies()) {
             if (b->shape().type == Shape::Type::Plane) continue; // drawn below
             if (b->isStatic()) {
-                drawBody(*b, {150, 155, 165, 255});
+                drawBody(*b, colorOf(*b, {150, 155, 165, 255}));
                 continue;
             }
-            drawBody(*b, palette[i++ % std::size(palette)]);
+            drawBody(*b, colorOf(*b, palette[i++ % std::size(palette)]));
             if (app.showVectors) {
                 drawArrow(b->x, b->omega() * 0.3, {200, 160, 0, 255});
                 drawArrow(b->x, b->L * 0.3, MAGENTA);
             }
         }
+        if (const auto& decorate = scenes()[app.sceneIndex].decorate) decorate();
         // Translucent planes last and without depth writes, so bodies that sink
         // below them stay visible.
         rlDrawRenderBatchActive();
