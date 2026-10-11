@@ -106,6 +106,7 @@ void World::warmStartFromCache() {
                 if (d2 < best) {
                     best = d2;
                     p.normalImpulse = c.impulse;
+                    p.tangentImpulse = c.tangentImpulse;
                 }
             }
         }
@@ -116,8 +117,8 @@ void World::updateCache() {
     cache_.clear();
     for (const ContactManifold& m : contacts_)
         for (int i = 0; i < m.count; ++i)
-            cache_.push_back(
-                {m.a, m.b, transpose(m.a->R()) * (m.points[i].position - m.a->x), m.points[i].normalImpulse});
+            cache_.push_back({m.a, m.b, transpose(m.a->R()) * (m.points[i].position - m.a->x),
+                              m.points[i].normalImpulse, m.points[i].tangentImpulse});
 }
 
 Real World::totalEnergy() const {

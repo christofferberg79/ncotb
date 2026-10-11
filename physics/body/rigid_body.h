@@ -23,6 +23,8 @@ public:
     /// Coefficient of restitution (0 = no bounce, 1 = elastic). A contact uses the
     /// larger value of the two bodies.
     Real restitution = 0.3;
+    /// Coulomb friction coefficient. A contact uses sqrt(mu_a mu_b).
+    Real friction = 0.5;
 
     // --- force/torque accumulators (cleared after each step) ---
     Vec3 force{};

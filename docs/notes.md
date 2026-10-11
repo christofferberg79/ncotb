@@ -165,5 +165,45 @@ Both stay calm, with no jitter or launch. A stack started 3 cm into itself settl
 right heights. With sequential impulses a little push-out speed (≤ 0.3 m/s) survives a
 few steps, because 10 relax iterations don't fully converge in a coupled stack.
 
-**Known limitations:** no friction yet, so spheres roll and slide forever; no continuous
-collision detection, so a fast body can pass through a thin box.
+**Known limitation:** no continuous collision detection, so a fast body can pass through a
+thin box.
+
+## Friction (milestone 4)
+
+Each contact point gets two friction rows along tangents t1, t2. The tangents depend only on
+the normal, so a resting contact keeps the same ones every step. The friction rows try to
+make the sliding velocity zero, with the friction impulse limited to the disc
+|f| ≤ μ·λ_n (a circular Coulomb cone). The coefficient is per body, combined as
+√(μ_a μ_b), as in Box2D.
+
+- **Sequential impulses:** within each pass, a point's friction is solved first and its
+  normal row last, so non-penetration is what holds best. The friction impulse is
+  warm-started too. It is stored as a world-space vector and projected onto the new tangents.
+- **Baraff LCP:** Baraff's pivoting method handles the normal impulses only. With friction
+  the solver alternates, 4 rounds by default: exact LCP for the normals with friction held
+  fixed, then friction passes with the normals held fixed ("staggered projections",
+  Kaufman et al. 2008).
+- After the last pass, friction is clamped onto the cone once more, because the normal
+  impulse may have shrunk after friction was last solved.
+- The restitution pass leaves friction alone. The relax pass includes it.
+
+**A bug found by the rolling test.** The relax pass used to turn the contact offsets
+r_a, r_b along with the bodies. A sphere's contact point stays at the bottom while the
+sphere turns, so the turned offset gave the normal impulse a lever arm. That made a
+braking torque, like rolling resistance: the ball rolled downhill 8% too slowly. Now the
+turned offsets are only used to measure how the gap changed, as in Box2D. The lever arms
+stay as they were at the start of the step.
+
+Results (both solvers, 240 Hz, 4 substeps):
+
+| Test | Measured | Theory |
+|---|---|---|
+| box on a 30° ramp, μ = 0.2 | a = 3.2059 m/s² | g(sin θ − μ cos θ) = 3.2059 |
+| box on a 20° ramp, μ = 0.5 | stays put | tan 20° = 0.36 < μ |
+| ball rolling down 20° | a = 2.3966 m/s² | 5/7·g·sin θ = 2.3966 |
+| ball skidding at 4 m/s, no spin | rolls at 2.8571 m/s | 5/7·v₀ = 2.8571 |
+| box sliding at 3 m/s, μ = 0.4 | stops after 1.1452 m | v₀²/(2μg) = 1.1468 |
+| 5-box stack, 10 iterations × 1 substep | drift < 1 mm in 5 s | (12 mm without friction) |
+
+There's no rolling resistance, so a ball on flat ground rolls forever, which is correct for
+rigid bodies.

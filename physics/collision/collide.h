@@ -13,6 +13,9 @@ struct ContactPoint {
     /// Accumulated normal impulse from the contact solver (N s); also used to
     /// warm start the next step.
     Real normalImpulse = 0;
+    /// Accumulated friction impulse on body a (world space, perpendicular to the
+    /// normal); also warm starts the next step.
+    Vec3 tangentImpulse{};
 };
 
 /// The contact between two bodies: one normal and up to four points (enough to

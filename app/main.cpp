@@ -98,7 +98,8 @@ void drawArrow(const Vec3& from, const Vec3& dir, Color color) {
 
 /// Contact points (red), normals from b towards a (orange) and penetration
 /// depth drawn along the normal (dark red).
-/// Contact forces (green) on body a: impulse / step length, scaled to metres.
+/// Contact forces on body a: normal (green) and friction (blue), as impulse /
+/// step length, scaled to metres.
 void drawContacts(const std::vector<ContactManifold>& contacts, bool normals, Real forceScale, Real h) {
     for (const ContactManifold& m : contacts) {
         for (int i = 0; i < m.count; ++i) {
@@ -109,6 +110,8 @@ void drawContacts(const std::vector<ContactManifold>& contacts, bool normals, Re
             DrawLine3D(toRl(p.position - half), toRl(p.position + half), MAROON);
             if (forceScale > 0 && p.normalImpulse > 0)
                 drawArrow(p.position, m.normal * (p.normalImpulse / h * forceScale), {0, 160, 60, 255});
+            if (forceScale > 0 && lengthSquared(p.tangentImpulse) > 0)
+                drawArrow(p.position, p.tangentImpulse * (forceScale / h), {30, 90, 230, 255});
         }
     }
 }
@@ -214,6 +217,32 @@ const std::vector<Scene>& scenes() {
                      place(w, Shape::box({0.4, 0.4, 0.4}), 1,
                            {1.5 + (k - (2 - row) / 2.0) * 0.82, 0.4 + 0.8 * row, 0})
                          .restitution = 0;
+         }},
+        {"Friction ramp (mu = 0.2, 0.4, 0.6, 0.8)", true,
+         [](World& w) {
+             w.gravity = {0, -9.81, 0};
+             w.addBody(Shape::plane(), 0).friction = 0.5;
+             // 25 degree ramp: tan 25 = 0.47, so the first two boxes slide.
+             const Real theta = 25 * M_PI / 180;
+             // Tilted so it faces the default camera: it rises towards -x.
+             const Quat q = Quat::fromAxisAngle({0, 0, 1}, -theta);
+             const Vec3 n = rotate(q, {0, 1, 0}), uphill = -rotate(q, {1, 0, 0}), across{0, 0, 1};
+             const Vec3 centre{0, 2.2, 0};
+             RigidBody& ramp = place(w, Shape::box({4.5, 0.1, 3.2}), 0, centre - n * 0.1, q);
+             ramp.friction = 1; // combined mu = sqrt(mu_box * 1), so mu_box = mu^2
+             const Real mus[4] = {0.2, 0.4, 0.6, 0.8};
+             for (int i = 0; i < 4; ++i) {
+                 RigidBody& b = place(w, Shape::box({0.3, 0.2, 0.3}), 1,
+                                      centre + uphill * 2.5 + across * (i - 1.5) * 0.9 + n * 0.2, q);
+                 b.friction = mus[i] * mus[i];
+                 b.restitution = 0;
+             }
+             for (int i = 0; i < 2; ++i) {
+                 RigidBody& ball = place(w, Shape::sphere(0.25), 1,
+                                         centre + uphill * 3.5 + across * (i * 2 - 1) * 2.4 + n * 0.25);
+                 ball.friction = 0.25;
+                 ball.restitution = 0;
+             }
          }},
         {"Restitution (e = 0, 0.25, 0.5, 0.75, 1)", true,
          [](World& w) {
@@ -405,6 +434,9 @@ struct App {
         if (ImGui::SliderFloat("Max push (m/s)", &maxPush, 0.1f, 10, "%.1f", ImGuiSliderFlags_Logarithmic))
             cs.maxPushVelocity = maxPush;
         ImGui::Checkbox("Relax (remove push-out velocity)", &cs.relax);
+        ImGui::Checkbox("Friction", &cs.friction);
+        if (cs.type == ContactSolverType::BaraffLcp && cs.friction)
+            ImGui::SliderInt("Normal/friction rounds", &cs.staggers, 1, 10);
         ImGui::Checkbox("Resolve contacts", &world.resolveContacts);
         const ContactSolverStats& st = world.solver.stats();
         if (cs.type == ContactSolverType::BaraffLcp)
@@ -419,6 +451,7 @@ struct App {
         ImGui::SameLine();
         ImGui::SetNextItemWidth(120);
         ImGui::SliderFloat("Force arrows (m/N)", &forceScale, 0, 0.2f);
+        ImGui::TextDisabled("green: normal force, blue: friction (on body a)");
         int points = 0;
         Real maxDepth = 0;
         for (const ContactManifold& m : world.contacts()) {

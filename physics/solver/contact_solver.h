@@ -25,6 +25,8 @@ struct ContactSettings {
     Real maxPushVelocity = 1.0;      ///< cap on the push-out speed (m/s)
     bool relax = true;               ///< remove the push-out velocity after moving (soft step)
     Real restitutionThreshold = 0.5; ///< no bounce below this approach speed (m/s)
+    bool friction = true;            ///< Coulomb friction (two tangent rows per point)
+    int staggers = 4;                ///< Baraff LCP with friction: normal/friction alternations
 };
 
 struct ContactSolverStats {
@@ -37,7 +39,15 @@ struct ContactSolverStats {
 ///
 ///     v_n = n . (v_a + w_a x r_a - v_b - w_b x r_b) >= target,   impulse >= 0,
 ///
-/// complementary (an impulse only where the constraint is active).
+/// complementary (an impulse only where the constraint is active), plus two
+/// friction rows along tangents t1, t2 that try to make the sliding velocity
+/// zero, with the friction impulse limited to |f| <= mu * normal impulse
+/// (a circular Coulomb cone).
+///
+/// Sequential impulses solve friction and normal rows together, one at a time.
+/// The Baraff LCP handles normals only, so with friction it alternates: exact
+/// LCP for the normals with friction fixed, then friction with the normals
+/// fixed ("staggered projections", Kaufman et al. 2008).
 ///
 /// A step has three phases (the "soft step" of Box2D v3):
 ///   1. solveVelocities(): target 0 for touching contacts, a push-out
@@ -51,7 +61,7 @@ class ContactSolver {
 public:
     ContactSettings settings;
 
-    /// Builds one row per contact point. Impulses are stored in ContactPoint::normalImpulse.
+    /// Builds one row per contact point. Impulses are stored in the contact points.
     void prepare(std::vector<ContactManifold>& contacts, Real h);
     void solveVelocities();
     void relax();
@@ -63,23 +73,33 @@ private:
         RigidBody* a;
         RigidBody* b;
         Vec3 n;        ///< normal, b to a
+        Vec3 t1, t2;   ///< tangents: n, t1, t2 orthonormal
+        Real mu;       ///< combined friction coefficient
         Vec3 ra, rb;   ///< contact point relative to each centre of mass
         Vec3 ra0, rb0; ///< the same at prepare(), and the poses then:
         Vec3 xa0, xb0; ///<   to measure how far the bodies moved
         Quat qa0, qb0;
         Real depth0;            ///< penetration at prepare()
         Real invK;              ///< 1 / (J M^-1 J^T): effective mass along n
+        Real invKt1, invKt2;    ///< the same along t1 and t2
+        Real lt1, lt2;          ///< accumulated friction impulse along t1, t2
         Real target;            ///< target v_n of the current phase
         Real restitutionTarget; ///< -e * impact v_n, or -inf if no bounce
-        Real* impulse;          ///< accumulated impulse, in the manifold
+        Real* impulse;          ///< accumulated normal impulse, in the manifold
+        Vec3* tangentImpulse;   ///< friction impulse vector, in the manifold
     };
 
-    Real normalVelocity(const Row& r) const;
-    void applyRowImpulse(const Row& r, Real dLambda) const;
-    /// Moves ra, rb with the bodies (after they moved) and returns the current depth.
+    Vec3 relativeVelocity(const Row& r) const;
+    Real normalVelocity(const Row& r) const { return dot(r.n, relativeVelocity(r)); }
+    void applyRowImpulse(const Row& r, const Vec3& J) const;
+    /// Returns the current depth after the bodies moved (and updates the effective masses).
     Real updateAnchors(Row& r) const;
-    void sequentialImpulses();
+    void solveFriction(Row& r) const;
+    void storeFriction();
+    void sequentialImpulses(bool withFriction);
     void baraffLcp(bool replace);
+    /// LCP for the normals, alternating with friction passes when friction is on.
+    void baraffWithFriction();
 
     std::vector<Row> rows_;
     Real h_ = 0;

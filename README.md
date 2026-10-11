@@ -38,7 +38,7 @@ physics/   simulation library (no graphics dependency)
   body/    Shape, RigidBody
   integration/  Euler, Midpoint, Heun, RK4 for any OdeSystem
   collision/    sphere/box/plane contact manifolds
-  solver/       contact solvers: sequential impulses, Baraff LCP
+  solver/       contact solvers with friction: sequential impulses, Baraff LCP
   world.*  World: owns bodies, fixed-step integration
 app/       raylib + ImGui front-end, scenes
 tests/     doctest unit tests
@@ -52,7 +52,7 @@ docs/      notes
   - selectable integrators: Euler, Semi-implicit Euler, Midpoint, Heun, RK4
 - [x] 2. Collision detection: sphere/plane/box, contact manifolds
 - [x] 3. Contacts: collisions + resting contact (Sequential Impulses / PGS, plus Baraff's LCP for comparison)
-- [ ] 4. Friction
+- [x] 4. Friction
 - [ ] 5. Springs, dampers, joints (ball, hinge, slider)
 - [ ] 6. Interaction: mouse picking/dragging, impulses, spawning
 - [ ] 7. Heightfield terrain

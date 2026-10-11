@@ -81,6 +81,7 @@ private:
         const RigidBody* b;
         Vec3 localA; ///< contact point in a's body coordinates
         Real impulse;
+        Vec3 tangentImpulse;
     };
 
     std::vector<std::unique_ptr<RigidBody>> bodies_;
