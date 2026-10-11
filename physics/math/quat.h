@@ -24,8 +24,16 @@ struct Quat {
         return {std::cos(angle / 2), theta * k};
     }
 
-    constexpr Quat& operator+=(const Quat& q) { s += q.s; v += q.v; return *this; }
-    constexpr Quat& operator*=(Real k) { s *= k; v *= k; return *this; }
+    constexpr Quat& operator+=(const Quat& q) {
+        s += q.s;
+        v += q.v;
+        return *this;
+    }
+    constexpr Quat& operator*=(Real k) {
+        s *= k;
+        v *= k;
+        return *this;
+    }
 };
 
 constexpr Quat operator+(Quat a, const Quat& b) { return a += b; }
@@ -51,6 +59,7 @@ constexpr Vec3 rotate(const Quat& q, const Vec3& p) {
     return p + q.s * t + cross(q.v, t);
 }
 
+// clang-format off
 /// Rotation matrix of a unit quaternion (Baraff, Rigid Body Simulation I, eq. 4-2).
 constexpr Mat3 toMat3(const Quat& q) {
     Real s = q.s, x = q.v.x, y = q.v.y, z = q.v.z;
@@ -58,5 +67,6 @@ constexpr Mat3 toMat3(const Quat& q) {
             2 * (x * y + s * z),     1 - 2 * (x * x + z * z), 2 * (y * z - s * x),
             2 * (x * z - s * y),     2 * (y * z + s * x),     1 - 2 * (x * x + y * y)};
 }
+// clang-format on
 
 } // namespace ncotb

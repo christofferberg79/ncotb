@@ -1,0 +1,18 @@
+# Matches the existing style; VS Code formats on save via clangd.
+BasedOnStyle: LLVM
+IndentWidth: 4
+ColumnLimit: 110
+PointerAlignment: Left
+AccessModifierOffset: -4
+IndentCaseLabels: false
+NamespaceIndentation: None
+AllowShortFunctionsOnASingleLine: All
+AllowShortIfStatementsOnASingleLine: WithoutElse
+AllowShortLoopsOnASingleLine: false
+AllowShortCaseLabelsOnASingleLine: true
+AllowShortBlocksOnASingleLine: Empty
+FixNamespaceComments: true
+PackConstructorInitializers: CurrentLine
+# 3x3 matrix literals are laid out by hand inside // clang-format off/on.
+IncludeBlocks: Preserve
+SortIncludes: CaseSensitive

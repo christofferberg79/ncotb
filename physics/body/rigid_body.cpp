@@ -29,8 +29,6 @@ Vec3 RigidBody::omegaAt(const Quat& orientation) const {
     return R * (IbodyInv_ * (transpose(R) * L));
 }
 
-Real RigidBody::kineticEnergy() const {
-    return Real(0.5) * (dot(P, v_) + dot(L, omega_));
-}
+Real RigidBody::kineticEnergy() const { return Real(0.5) * (dot(P, v_) + dot(L, omega_)); }
 
 } // namespace ncotb

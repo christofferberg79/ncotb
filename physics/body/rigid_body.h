@@ -26,13 +26,22 @@ public:
 
     void addForce(const Vec3& f) { force += f; }
     /// Force f applied at world-space point p contributes torque (p - x) x f.
-    void addForceAtPoint(const Vec3& f, const Vec3& p) { force += f; torque += cross(p - x, f); }
-    void clearForces() { force = {}; torque = {}; }
+    void addForceAtPoint(const Vec3& f, const Vec3& p) {
+        force += f;
+        torque += cross(p - x, f);
+    }
+    void clearForces() {
+        force = {};
+        torque = {};
+    }
 
     /// Recompute R, I^-1, v and omega from the state variables.
     void updateDerived();
 
-    void setLinearVelocity(const Vec3& vel) { P = vel * mass_; updateDerived(); }
+    void setLinearVelocity(const Vec3& vel) {
+        P = vel * mass_;
+        updateDerived();
+    }
     /// Sets L = I omega so that the body spins with the given angular velocity.
     void setAngularVelocity(const Vec3& w);
 

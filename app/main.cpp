@@ -56,10 +56,12 @@ struct OrbitCamera {
 void drawBody(const RigidBody& b, Color color) {
     // Column-major 4x4 transform from R and x.
     const Mat3& R = b.R();
+    // clang-format off
     float m[16] = {float(R.m[0][0]), float(R.m[1][0]), float(R.m[2][0]), 0,
                    float(R.m[0][1]), float(R.m[1][1]), float(R.m[2][1]), 0,
                    float(R.m[0][2]), float(R.m[1][2]), float(R.m[2][2]), 0,
                    float(b.x.x),     float(b.x.y),     float(b.x.z),     1};
+    // clang-format on
     rlPushMatrix();
     rlMultMatrixf(m);
     const Shape& s = b.shape();
@@ -144,7 +146,8 @@ struct App {
         world.clear();
         scenes()[i].build(world);
         accumulator = 0;
-        for (auto& h : omegaHistory) h.fill(0);
+        for (auto& h : omegaHistory)
+            h.fill(0);
         energyErrorHistory.fill(0);
         historyPos = 0;
         energy0 = world.totalEnergy();
@@ -155,7 +158,8 @@ struct App {
         const RigidBody& b = *world.bodies().front();
         // Angular velocity in body coordinates shows the axis flip clearly.
         Vec3 wb = transpose(b.R()) * b.omega();
-        for (int k = 0; k < 3; ++k) omegaHistory[k][historyPos] = float(wb[k]);
+        for (int k = 0; k < 3; ++k)
+            omegaHistory[k][historyPos] = float(wb[k]);
         energyErrorHistory[historyPos] = float(world.totalEnergy() - energy0);
         historyPos = (historyPos + 1) % kHistory;
     }
@@ -216,8 +220,8 @@ struct App {
         ImGui::Text("t = %.2f s   bodies = %zu", world.time(), world.bodies().size());
         ImGui::Text("Total energy  E   = %.5f J", energy);
         ImGui::Text("Energy error E-E0 = %+.2e J", energy - energy0);
-        ImGui::PlotLines("E-E0", energyErrorHistory.data(), kHistory, historyPos, nullptr,
-                         FLT_MAX, FLT_MAX, {0, 50});
+        ImGui::PlotLines("E-E0", energyErrorHistory.data(), kHistory, historyPos, nullptr, FLT_MAX, FLT_MAX,
+                         {0, 50});
         ImGui::Text("Ang. momentum |L| = %.5f", length(L));
         ImGui::Text("Lin. momentum |P| = %.5f", length(P));
 
@@ -226,8 +230,8 @@ struct App {
             ImGui::TextUnformatted("Body 0 omega in body frame (x, y, z):");
             const char* labels[3] = {"wx", "wy", "wz"};
             for (int k = 0; k < 3; ++k)
-                ImGui::PlotLines(labels[k], omegaHistory[k].data(), kHistory, historyPos, nullptr,
-                                 -8.0f, 8.0f, {0, 50});
+                ImGui::PlotLines(labels[k], omegaHistory[k].data(), kHistory, historyPos, nullptr, -8.0f,
+                                 8.0f, {0, 50});
         }
         ImGui::Separator();
         ImGui::TextDisabled("Drag: orbit   Wheel: zoom   %d FPS", GetFPS());
@@ -256,7 +260,7 @@ int main() {
     app.loadScene(0);
     OrbitCamera orbit;
 
-    const Color palette[] = {{230, 120, 70, 255}, {80, 150, 220, 255}, {120, 190, 100, 255},
+    const Color palette[] = {{230, 120, 70, 255}, {80, 150, 220, 255},  {120, 190, 100, 255},
                              {220, 190, 70, 255}, {170, 110, 200, 255}, {90, 200, 190, 255}};
 
     while (!WindowShouldClose()) {

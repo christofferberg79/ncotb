@@ -16,10 +16,30 @@ struct Vec3 {
     constexpr Real operator[](int i) const { return i == 0 ? x : (i == 1 ? y : z); }
 
     constexpr Vec3 operator-() const { return {-x, -y, -z}; }
-    constexpr Vec3& operator+=(const Vec3& v) { x += v.x; y += v.y; z += v.z; return *this; }
-    constexpr Vec3& operator-=(const Vec3& v) { x -= v.x; y -= v.y; z -= v.z; return *this; }
-    constexpr Vec3& operator*=(Real s) { x *= s; y *= s; z *= s; return *this; }
-    constexpr Vec3& operator/=(Real s) { x /= s; y /= s; z /= s; return *this; }
+    constexpr Vec3& operator+=(const Vec3& v) {
+        x += v.x;
+        y += v.y;
+        z += v.z;
+        return *this;
+    }
+    constexpr Vec3& operator-=(const Vec3& v) {
+        x -= v.x;
+        y -= v.y;
+        z -= v.z;
+        return *this;
+    }
+    constexpr Vec3& operator*=(Real s) {
+        x *= s;
+        y *= s;
+        z *= s;
+        return *this;
+    }
+    constexpr Vec3& operator/=(Real s) {
+        x /= s;
+        y /= s;
+        z /= s;
+        return *this;
+    }
 };
 
 constexpr Vec3 operator+(Vec3 a, const Vec3& b) { return a += b; }

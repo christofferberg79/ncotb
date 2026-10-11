@@ -14,7 +14,8 @@ void World::step(Real h) {
         stepSemiImplicitEuler(h);
     else
         generic_.step(integrator, *this, time_, h);
-    for (auto& b : bodies_) b->clearForces();
+    for (auto& b : bodies_)
+        b->clearForces();
     time_ += h;
 }
 
@@ -51,7 +52,8 @@ void World::stepSemiImplicitEuler(Real h) {
 
 Real World::totalEnergy() const {
     Real e = 0;
-    for (auto& b : bodies_) e += b->kineticEnergy() - b->mass() * dot(gravity, b->x);
+    for (auto& b : bodies_)
+        e += b->kineticEnergy() - b->mass() * dot(gravity, b->x);
     return e;
 }
 
@@ -62,7 +64,10 @@ void World::getState(Real* y) const {
             y[7 + k] = b->P[k];
             y[10 + k] = b->L[k];
         }
-        y[3] = b->q.s; y[4] = b->q.v.x; y[5] = b->q.v.y; y[6] = b->q.v.z;
+        y[3] = b->q.s;
+        y[4] = b->q.v.x;
+        y[5] = b->q.v.y;
+        y[6] = b->q.v.z;
         y += kStateSize;
     }
 }
@@ -83,7 +88,8 @@ void World::setState(const Real* y) {
 }
 
 void World::derivative(Real t, Real* dydt) {
-    for (auto& b : bodies_) b->clearForces();
+    for (auto& b : bodies_)
+        b->clearForces();
     applyForces(t);
     for (auto& body : bodies_) {
         const RigidBody& b = *body;
@@ -97,7 +103,10 @@ void World::derivative(Real t, Real* dydt) {
                 dydt[7 + k] = b.force[k];
                 dydt[10 + k] = b.torque[k];
             }
-            dydt[3] = qdot.s; dydt[4] = qdot.v.x; dydt[5] = qdot.v.y; dydt[6] = qdot.v.z;
+            dydt[3] = qdot.s;
+            dydt[4] = qdot.v.x;
+            dydt[5] = qdot.v.y;
+            dydt[6] = qdot.v.z;
         }
         dydt += kStateSize;
     }

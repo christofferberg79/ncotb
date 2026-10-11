@@ -8,7 +8,8 @@ TEST_CASE("free fall under gravity") {
     World world;
     RigidBody& b = world.addBody(Shape::sphere(0.5), 2.0);
     const Real h = 1.0 / 240;
-    for (int i = 0; i < 240; ++i) world.step(h);
+    for (int i = 0; i < 240; ++i)
+        world.step(h);
     CHECK(b.v().y == doctest::Approx(-9.81).epsilon(1e-9));
     // semi-implicit Euler: y = -g h^2 n(n+1)/2
     CHECK(b.x.y == doctest::Approx(-9.81 * h * h * 240 * 241 / 2));
@@ -29,7 +30,8 @@ TEST_CASE("torque-free spin conserves angular momentum and (nearly) energy") {
     b.setAngularVelocity({0.1, 8.0, 0.1}); // near the intermediate axis
     Vec3 L0 = b.L;
     Real E0 = b.kineticEnergy();
-    for (int i = 0; i < 240 * 10; ++i) world.step(1.0 / 240);
+    for (int i = 0; i < 240 * 10; ++i)
+        world.step(1.0 / 240);
     CHECK(length(b.L - L0) < 1e-12);
     CHECK(b.kineticEnergy() == doctest::Approx(E0).epsilon(0.001));
 }

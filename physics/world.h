@@ -20,7 +20,10 @@ public:
 
     RigidBody& addBody(const Shape& shape, Real mass);
     /// Removes all bodies; settings (gravity, integrator) are kept.
-    void clear() { bodies_.clear(); time_ = 0; }
+    void clear() {
+        bodies_.clear();
+        time_ = 0;
+    }
 
     /// Advance the simulation by one fixed step h with the selected integrator.
     void step(Real h);

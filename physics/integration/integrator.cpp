@@ -17,7 +17,8 @@ const char* name(IntegratorType type) {
 
 void Integrator::step(IntegratorType type, OdeSystem& system, Real t, Real h) {
     const size_t n = size_t(system.dimension());
-    for (auto* v : {&y_, &tmp_, &k1_, &k2_, &k3_, &k4_}) v->resize(n);
+    for (auto* v : {&y_, &tmp_, &k1_, &k2_, &k3_, &k4_})
+        v->resize(n);
     system.getState(y_.data());
 
     switch (type) {
@@ -32,27 +33,32 @@ void Integrator::step(IntegratorType type, OdeSystem& system, Real t, Real h) {
 // y(t+h) = y + h f(t, y)
 void Integrator::euler(OdeSystem& system, Real t, Real h) {
     system.derivative(t, k1_.data());
-    for (size_t i = 0; i < y_.size(); ++i) y_[i] += h * k1_[i];
+    for (size_t i = 0; i < y_.size(); ++i)
+        y_[i] += h * k1_[i];
     system.setState(y_.data());
 }
 
 // y(t+h) = y + h f(t + h/2, y + h/2 f(t, y))
 void Integrator::midpoint(OdeSystem& system, Real t, Real h) {
     system.derivative(t, k1_.data());
-    for (size_t i = 0; i < y_.size(); ++i) tmp_[i] = y_[i] + h / 2 * k1_[i];
+    for (size_t i = 0; i < y_.size(); ++i)
+        tmp_[i] = y_[i] + h / 2 * k1_[i];
     system.setState(tmp_.data());
     system.derivative(t + h / 2, k2_.data());
-    for (size_t i = 0; i < y_.size(); ++i) y_[i] += h * k2_[i];
+    for (size_t i = 0; i < y_.size(); ++i)
+        y_[i] += h * k2_[i];
     system.setState(y_.data());
 }
 
 // y(t+h) = y + h/2 (f(t, y) + f(t + h, y + h f(t, y)))
 void Integrator::heun(OdeSystem& system, Real t, Real h) {
     system.derivative(t, k1_.data());
-    for (size_t i = 0; i < y_.size(); ++i) tmp_[i] = y_[i] + h * k1_[i];
+    for (size_t i = 0; i < y_.size(); ++i)
+        tmp_[i] = y_[i] + h * k1_[i];
     system.setState(tmp_.data());
     system.derivative(t + h, k2_.data());
-    for (size_t i = 0; i < y_.size(); ++i) y_[i] += h / 2 * (k1_[i] + k2_[i]);
+    for (size_t i = 0; i < y_.size(); ++i)
+        y_[i] += h / 2 * (k1_[i] + k2_[i]);
     system.setState(y_.data());
 }
 
@@ -63,19 +69,23 @@ void Integrator::rk4(OdeSystem& system, Real t, Real h) {
     const size_t n = y_.size();
     system.derivative(t, k1_.data());
 
-    for (size_t i = 0; i < n; ++i) tmp_[i] = y_[i] + h / 2 * k1_[i];
+    for (size_t i = 0; i < n; ++i)
+        tmp_[i] = y_[i] + h / 2 * k1_[i];
     system.setState(tmp_.data());
     system.derivative(t + h / 2, k2_.data());
 
-    for (size_t i = 0; i < n; ++i) tmp_[i] = y_[i] + h / 2 * k2_[i];
+    for (size_t i = 0; i < n; ++i)
+        tmp_[i] = y_[i] + h / 2 * k2_[i];
     system.setState(tmp_.data());
     system.derivative(t + h / 2, k3_.data());
 
-    for (size_t i = 0; i < n; ++i) tmp_[i] = y_[i] + h * k3_[i];
+    for (size_t i = 0; i < n; ++i)
+        tmp_[i] = y_[i] + h * k3_[i];
     system.setState(tmp_.data());
     system.derivative(t + h, k4_.data());
 
-    for (size_t i = 0; i < n; ++i) y_[i] += h / 6 * (k1_[i] + 2 * k2_[i] + 2 * k3_[i] + k4_[i]);
+    for (size_t i = 0; i < n; ++i)
+        y_[i] += h / 6 * (k1_[i] + 2 * k2_[i] + 2 * k3_[i] + k4_[i]);
     system.setState(y_.data());
 }
 

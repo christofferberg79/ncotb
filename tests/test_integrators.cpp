@@ -15,7 +15,8 @@ Real freeFallEnergyChange(IntegratorType type, Real h, Real t) {
     RigidBody& b = world.addBody(Shape::sphere(0.3), 1.0);
     b.setLinearVelocity({5, 9, 0});
     Real e0 = world.totalEnergy();
-    for (int i = 0; i < int(std::lround(t / h)); ++i) world.step(h);
+    for (int i = 0; i < int(std::lround(t / h)); ++i)
+        world.step(h);
     return world.totalEnergy() - e0;
 }
 
@@ -32,7 +33,8 @@ World tumblingBox(IntegratorType type) {
 /// Orientation of the tumbling box after t seconds, as the rotated x and y axes.
 std::pair<Vec3, Vec3> tumbleAxes(IntegratorType type, Real h, Real t) {
     World world = tumblingBox(type);
-    for (int i = 0; i < int(std::lround(t / h)); ++i) world.step(h);
+    for (int i = 0; i < int(std::lround(t / h)); ++i)
+        world.step(h);
     const RigidBody& b = *world.bodies().front();
     return {b.R().column(0), b.R().column(1)};
 }
@@ -59,7 +61,11 @@ TEST_CASE("free fall: Midpoint, Heun and RK4 are exact for a parabola") {
 }
 
 TEST_CASE("convergence order on a tumbling box") {
-    struct Case { IntegratorType type; Real h; Real expectedRatio; };
+    struct Case {
+        IntegratorType type;
+        Real h;
+        Real expectedRatio;
+    };
     const Case cases[] = {
         {IntegratorType::Euler, 1.0 / 400, 2},
         {IntegratorType::Midpoint, 1.0 / 200, 4},
@@ -78,7 +84,8 @@ TEST_CASE("torque-free tumbling conserves |L| for every integrator") {
         CAPTURE(name(type));
         World world = tumblingBox(type);
         Vec3 L0 = world.bodies().front()->L;
-        for (int i = 0; i < 240 * 10; ++i) world.step(1.0 / 240);
+        for (int i = 0; i < 240 * 10; ++i)
+            world.step(1.0 / 240);
         CHECK(length(world.bodies().front()->L - L0) < 1e-12);
     }
 }
@@ -86,6 +93,7 @@ TEST_CASE("torque-free tumbling conserves |L| for every integrator") {
 TEST_CASE("RK4 keeps the energy of a tumbling box within 0.1% over 10 s") {
     World world = tumblingBox(IntegratorType::RK4);
     Real e0 = world.totalEnergy();
-    for (int i = 0; i < 240 * 10; ++i) world.step(1.0 / 240);
+    for (int i = 0; i < 240 * 10; ++i)
+        world.step(1.0 / 240);
     CHECK(world.totalEnergy() == doctest::Approx(e0).epsilon(0.001));
 }

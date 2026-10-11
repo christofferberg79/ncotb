@@ -9,8 +9,8 @@ struct Shape {
     enum class Type { Sphere, Box };
 
     Type type = Type::Sphere;
-    Real radius = 0.5;     ///< Sphere
-    Vec3 halfExtents{};    ///< Box
+    Real radius = 0.5;  ///< Sphere
+    Vec3 halfExtents{}; ///< Box
 
     static Shape sphere(Real r) { return {Type::Sphere, r, {}}; }
     static Shape box(const Vec3& halfExtents) { return {Type::Box, 0, halfExtents}; }
@@ -23,9 +23,8 @@ struct Shape {
         }
         Vec3 d = 2 * halfExtents; // full side lengths
         Real k = mass / 12;
-        return Mat3::diagonal({k * (d.y * d.y + d.z * d.z),
-                               k * (d.x * d.x + d.z * d.z),
-                               k * (d.x * d.x + d.y * d.y)});
+        return Mat3::diagonal(
+            {k * (d.y * d.y + d.z * d.z), k * (d.x * d.x + d.z * d.z), k * (d.x * d.x + d.y * d.y)});
     }
 };
 

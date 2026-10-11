@@ -9,10 +9,12 @@ struct Mat3 {
     Real m[3][3] = {{0, 0, 0}, {0, 0, 0}, {0, 0, 0}};
 
     constexpr Mat3() = default;
+    // clang-format off
     constexpr Mat3(Real a00, Real a01, Real a02,
                    Real a10, Real a11, Real a12,
                    Real a20, Real a21, Real a22)
         : m{{a00, a01, a02}, {a10, a11, a12}, {a20, a21, a22}} {}
+    // clang-format on
 
     static constexpr Mat3 identity() { return {1, 0, 0, 0, 1, 0, 0, 0, 1}; }
     static constexpr Mat3 diagonal(const Vec3& d) { return {d.x, 0, 0, 0, d.y, 0, 0, 0, d.z}; }
@@ -30,17 +32,20 @@ struct Mat3 {
 
     constexpr Mat3& operator+=(const Mat3& b) {
         for (int i = 0; i < 3; ++i)
-            for (int j = 0; j < 3; ++j) m[i][j] += b.m[i][j];
+            for (int j = 0; j < 3; ++j)
+                m[i][j] += b.m[i][j];
         return *this;
     }
     constexpr Mat3& operator-=(const Mat3& b) {
         for (int i = 0; i < 3; ++i)
-            for (int j = 0; j < 3; ++j) m[i][j] -= b.m[i][j];
+            for (int j = 0; j < 3; ++j)
+                m[i][j] -= b.m[i][j];
         return *this;
     }
     constexpr Mat3& operator*=(Real s) {
         for (auto& r : m)
-            for (auto& v : r) v *= s;
+            for (auto& v : r)
+                v *= s;
         return *this;
     }
 };
@@ -62,11 +67,13 @@ constexpr Mat3 operator*(const Mat3& a, const Mat3& b) {
     return r;
 }
 
+// clang-format off
 constexpr Mat3 transpose(const Mat3& a) {
     return {a.m[0][0], a.m[1][0], a.m[2][0],
             a.m[0][1], a.m[1][1], a.m[2][1],
             a.m[0][2], a.m[1][2], a.m[2][2]};
 }
+// clang-format on
 
 constexpr Real determinant(const Mat3& a) { return dot(a.row(0), cross(a.row(1), a.row(2))); }
 

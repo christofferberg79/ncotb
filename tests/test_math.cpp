@@ -6,7 +6,7 @@ using namespace ncotb;
 
 namespace {
 bool near(const Vec3& a, const Vec3& b, Real eps = 1e-12) { return length(a - b) < eps; }
-}
+} // namespace
 
 TEST_CASE("cross product follows the right-hand rule") {
     CHECK(near(cross({1, 0, 0}, {0, 1, 0}), {0, 0, 1}));
