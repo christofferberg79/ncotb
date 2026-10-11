@@ -21,6 +21,7 @@ Controls: drag to orbit, wheel to zoom, Space pause, S single step, R reset.
 physics/   simulation library (no graphics dependency)
   math/    Vec3, Mat3, Quat
   body/    Shape, RigidBody
+  integration/  Euler, Midpoint, Heun, RK4 for any OdeSystem
   world.*  World: owns bodies, fixed-step integration
 app/       raylib + ImGui front-end, scenes
 tests/     doctest unit tests
@@ -31,6 +32,7 @@ docs/      notes
 
 - [x] 0. Skeleton: CMake, raylib, ImGui, doctest, orbit camera
 - [x] 1. Free rigid body (x, q, P, L), inertia, gravity, Dzhanibekov effect
+  - selectable integrators: Euler, Semi-implicit Euler, Midpoint, Heun, RK4
 - [ ] 2. Collision detection: sphere/plane/box, contact manifolds
 - [ ] 3. Contacts: collisions + resting contact (Sequential Impulses / PGS, plus Baraff's LCP for comparison)
 - [ ] 4. Friction

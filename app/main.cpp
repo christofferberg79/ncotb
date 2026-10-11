@@ -9,6 +9,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cfloat>
 #include <cmath>
 #include <functional>
 #include <string>
@@ -134,7 +135,9 @@ struct App {
 
     static constexpr int kHistory = 600;
     std::array<float, kHistory> omegaHistory[3]{};
+    std::array<float, kHistory> energyErrorHistory{};
     int historyPos = 0;
+    Real energy0 = 0; ///< total energy when the scene was loaded
 
     void loadScene(int i) {
         sceneIndex = i;
@@ -142,7 +145,9 @@ struct App {
         scenes()[i].build(world);
         accumulator = 0;
         for (auto& h : omegaHistory) h.fill(0);
+        energyErrorHistory.fill(0);
         historyPos = 0;
+        energy0 = world.totalEnergy();
     }
 
     void recordHistory() {
@@ -151,6 +156,7 @@ struct App {
         // Angular velocity in body coordinates shows the axis flip clearly.
         Vec3 wb = transpose(b.R()) * b.omega();
         for (int k = 0; k < 3; ++k) omegaHistory[k][historyPos] = float(wb[k]);
+        energyErrorHistory[historyPos] = float(world.totalEnergy() - energy0);
         historyPos = (historyPos + 1) % kHistory;
     }
 
@@ -188,20 +194,30 @@ struct App {
         ImGui::SameLine();
         if (ImGui::Button("Step (S)")) stepOnce = true;
 
+        if (ImGui::BeginCombo("Integrator", name(world.integrator))) {
+            for (IntegratorType type : kAllIntegrators)
+                if (ImGui::Selectable(name(type), type == world.integrator)) {
+                    world.integrator = type;
+                    loadScene(sceneIndex); // restart so E - E0 compares like with like
+                }
+            ImGui::EndCombo();
+        }
         ImGui::SliderFloat("Time scale", &timeScale, 0.05f, 2.0f, "%.2f", ImGuiSliderFlags_Logarithmic);
         ImGui::SliderInt("Steps / s", &stepsPerSecond, 30, 1000);
         ImGui::Checkbox("Show omega (yellow) and L (magenta)", &showVectors);
 
         ImGui::Separator();
-        Real energy = 0;
+        Real energy = world.totalEnergy();
         Vec3 L{}, P{};
         for (auto& b : world.bodies()) {
-            energy += b->kineticEnergy() - b->mass() * dot(world.gravity, b->x);
             L += b->L + cross(b->x, b->P);
             P += b->P;
         }
         ImGui::Text("t = %.2f s   bodies = %zu", world.time(), world.bodies().size());
         ImGui::Text("Total energy  E   = %.5f J", energy);
+        ImGui::Text("Energy error E-E0 = %+.2e J", energy - energy0);
+        ImGui::PlotLines("E-E0", energyErrorHistory.data(), kHistory, historyPos, nullptr,
+                         FLT_MAX, FLT_MAX, {0, 50});
         ImGui::Text("Ang. momentum |L| = %.5f", length(L));
         ImGui::Text("Lin. momentum |P| = %.5f", length(P));
 
