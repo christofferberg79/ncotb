@@ -99,7 +99,7 @@ void App::gui() {
             if (ImGui::Selectable(scenes()[i].name, i == sceneIndex)) loadScene(i);
         ImGui::EndCombo();
     }
-    if (ImGui::Button("Reset (R)")) loadScene(sceneIndex);
+    if (ImGui::Button("Reset (R)")) resetScene();
     ImGui::SameLine();
     ImGui::Checkbox("Paused (Space)", &paused);
     ImGui::SameLine();
@@ -114,7 +114,7 @@ void App::gui() {
         for (IntegratorType type : kAllIntegrators)
             if (ImGui::Selectable(name(type), type == world.integrator)) {
                 freeIntegrator = type;
-                loadScene(sceneIndex); // restart so E - E0 compares like with like
+                resetScene(); // restart so E - E0 compares like with like
             }
         ImGui::EndCombo();
     }

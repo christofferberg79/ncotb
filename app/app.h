@@ -41,7 +41,14 @@ struct App {
     int historyPos = 0;
     Real energy0 = 0; ///< total energy when the scene was loaded
 
+    /// Loads scene i with its starting view.
     void loadScene(int i);
+    /// Restarts the current scene, keeping the camera where it is.
+    void resetScene() {
+        OrbitCamera view = orbit;
+        loadScene(sceneIndex);
+        orbit = view;
+    }
     void resetView() { orbit = startView; }
     /// The scene's action (e.g. "Fire"), if it has one.
     void runAction();

@@ -35,7 +35,7 @@ int main() {
         if (keysFree) {
             if (IsKeyPressed(KEY_SPACE)) app.paused = !app.paused;
             if (IsKeyPressed(KEY_S)) app.stepOnce = true;
-            if (IsKeyPressed(KEY_R)) app.loadScene(app.sceneIndex);
+            if (IsKeyPressed(KEY_R)) app.resetScene();
             if (IsKeyPressed(KEY_F)) app.runAction();
             if (IsKeyPressed(KEY_C)) app.resetView();
         }

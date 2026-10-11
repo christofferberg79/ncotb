@@ -33,7 +33,7 @@ Controls:
 | Shift + drag, or right-drag (two-finger click + drag) | pan |
 | scroll (two fingers) | zoom |
 | arrow keys (Shift: faster), Q / E | move the view's centre over the ground, down / up |
-| C | reset the view |
+| C | reset the view (R restarts the scene and keeps the view) |
 | Space / S / R / F | pause / single step / reset scene / scene action |
 
 ### VS Code
