@@ -36,15 +36,12 @@ FetchContent_Declare(doctest
   GIT_TAG v2.5.3
   GIT_SHALLOW TRUE)
 
-FetchContent_MakeAvailable(raylib doctest)
-FetchContent_GetProperties(imgui)
-if(NOT imgui_POPULATED)
-  FetchContent_Populate(imgui)
-endif()
-FetchContent_GetProperties(rlimgui)
-if(NOT rlimgui_POPULATED)
-  FetchContent_Populate(rlimgui)
-endif()
+# imgui and rlImGui have no CMakeLists.txt, so MakeAvailable only downloads them;
+# the imgui target below builds them.
+FetchContent_MakeAvailable(raylib doctest imgui rlimgui)
+# Warnings in third-party code aren't ours to fix, and VS Code's problem matcher
+# would report them as task errors.
+target_compile_options(raylib PRIVATE -w)
 
 add_library(imgui STATIC
   ${imgui_SOURCE_DIR}/imgui.cpp

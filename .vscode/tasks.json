@@ -1,4 +1,6 @@
 {
+    // Problem matchers are defined inline: the named "$gcc" matcher comes from the
+    // Microsoft C/C++ extension, which isn't installed (clangd is used instead).
     // All builds go through CMakePresets.json: debug -> build-debug/, release -> build/,
     // asan -> build-asan/. `cmake --preset X` is only run when the build dir is missing.
     "version": "2.0.0",
@@ -9,7 +11,14 @@
             "command": "test -f build-debug/build.ninja || cmake --preset debug; cmake --build --preset debug",
             "options": { "cwd": "${workspaceFolder}" },
             "group": { "kind": "build", "isDefault": true },
-            "problemMatcher": { "base": "$gcc", "fileLocation": ["autoDetect", "${workspaceFolder}/build-debug"] }
+            "problemMatcher": {
+                "owner": "cpp",
+                "fileLocation": ["autoDetect", "${workspaceFolder}/build-debug"],
+                "pattern": {
+                    "regexp": "^(.*?):(\\d+):(\\d*):?\\s+(?:fatal\\s+)?(warning|error):\\s+(.*)$",
+                    "file": 1, "line": 2, "column": 3, "severity": 4, "message": 5
+                }
+            }
         },
         {
             "label": "build (release)",
@@ -17,7 +26,14 @@
             "command": "test -f build/build.ninja || cmake --preset release; cmake --build --preset release",
             "options": { "cwd": "${workspaceFolder}" },
             "group": "build",
-            "problemMatcher": { "base": "$gcc", "fileLocation": ["autoDetect", "${workspaceFolder}/build"] }
+            "problemMatcher": {
+                "owner": "cpp",
+                "fileLocation": ["autoDetect", "${workspaceFolder}/build"],
+                "pattern": {
+                    "regexp": "^(.*?):(\\d+):(\\d*):?\\s+(?:fatal\\s+)?(warning|error):\\s+(.*)$",
+                    "file": 1, "line": 2, "column": 3, "severity": 4, "message": 5
+                }
+            }
         },
         {
             "label": "build (asan)",
@@ -25,7 +41,14 @@
             "command": "test -f build-asan/build.ninja || cmake --preset asan; cmake --build --preset asan",
             "options": { "cwd": "${workspaceFolder}" },
             "group": "build",
-            "problemMatcher": { "base": "$gcc", "fileLocation": ["autoDetect", "${workspaceFolder}/build-asan"] }
+            "problemMatcher": {
+                "owner": "cpp",
+                "fileLocation": ["autoDetect", "${workspaceFolder}/build-asan"],
+                "pattern": {
+                    "regexp": "^(.*?):(\\d+):(\\d*):?\\s+(?:fatal\\s+)?(warning|error):\\s+(.*)$",
+                    "file": 1, "line": 2, "column": 3, "severity": 4, "message": 5
+                }
+            }
         },
         {
             "label": "run tests",
