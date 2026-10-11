@@ -2,6 +2,16 @@
     "version": "0.2.0",
     "configurations": [
         {
+            // Optimized build (RelWithDebInfo, build/) for running at full speed.
+            // Start it with Ctrl+F5 (Run Without Debugging) to skip the debugger entirely.
+            "name": "Run app (release)",
+            "type": "lldb",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/app/ncotb",
+            "cwd": "${workspaceFolder}",
+            "preLaunchTask": "build (release)"
+        },
+        {
             "name": "Debug app",
             "type": "lldb",
             "request": "launch",
