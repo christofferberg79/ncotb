@@ -11,10 +11,10 @@ using namespace ncotb;
 namespace {
 
 constexpr Real kH = 1.0 / 240;
-constexpr ContactSolverType kSolvers[] = {ContactSolverType::SequentialImpulses,
-                                          ContactSolverType::BaraffLcp};
+constexpr SolverType kSolvers[] = {SolverType::SequentialImpulses,
+                                          SolverType::BaraffLcp};
 
-World groundWorld(ContactSolverType solver) {
+World groundWorld(SolverType solver) {
     World w;
     w.solver.settings.type = solver;
     w.addBody(Shape::plane(), 0);
@@ -38,7 +38,7 @@ Real supportForce(const World& w, const RigidBody& body) {
 }
 
 /// Height reached after the first bounce of a sphere dropped with its bottom at h0.
-Real reboundHeight(ContactSolverType solver, Real e, Real h0) {
+Real reboundHeight(SolverType solver, Real e, Real h0) {
     World w = groundWorld(solver);
     RigidBody& ball = w.addBody(Shape::sphere(0.25), 1);
     ball.restitution = e;
@@ -62,7 +62,7 @@ Real reboundHeight(ContactSolverType solver, Real e, Real h0) {
 } // namespace
 
 TEST_CASE("a sphere dropped on the ground comes to rest on it") {
-    for (ContactSolverType solver : kSolvers) {
+    for (SolverType solver : kSolvers) {
         INFO(name(solver));
         World w = groundWorld(solver);
         RigidBody& ball = w.addBody(Shape::sphere(0.5), 2);
@@ -78,7 +78,7 @@ TEST_CASE("a sphere dropped on the ground comes to rest on it") {
 }
 
 TEST_CASE("a box resting on its face is held up by m g, shared over 4 points") {
-    for (ContactSolverType solver : kSolvers) {
+    for (SolverType solver : kSolvers) {
         INFO(name(solver));
         World w = groundWorld(solver);
         RigidBody& box = w.addBody(Shape::box({0.5, 0.25, 0.4}), 3);
@@ -95,7 +95,7 @@ TEST_CASE("a box resting on its face is held up by m g, shared over 4 points") {
 }
 
 TEST_CASE("bounce height is about e^2 times the drop height") {
-    for (ContactSolverType solver : kSolvers) {
+    for (SolverType solver : kSolvers) {
         INFO(name(solver));
         CHECK(reboundHeight(solver, 0.5, 1.0) == doctest::Approx(0.25).epsilon(0.08));
         CHECK(reboundHeight(solver, 0.8, 1.0) == doctest::Approx(0.64).epsilon(0.05));
@@ -110,7 +110,7 @@ TEST_CASE("a stack of five boxes stands still (4 substeps)") {
     // Without friction (milestone 4) nothing resists sideways sliding, so the
     // tiny tilt left by an unconverged Gauss-Seidel solve makes the stack drift.
     // Substeps shrink that 16x (1.6 cm -> 1 mm in 5 s at 10 iterations).
-    for (ContactSolverType solver : kSolvers) {
+    for (SolverType solver : kSolvers) {
         INFO(name(solver));
         World w = groundWorld(solver);
         w.substeps = 4;
@@ -133,7 +133,7 @@ TEST_CASE("a stack of five boxes stands still (4 substeps)") {
 }
 
 TEST_CASE("an elastic head-on collision of equal spheres swaps their velocities") {
-    for (ContactSolverType solver : kSolvers) {
+    for (SolverType solver : kSolvers) {
         INFO(name(solver));
         World w;
         w.gravity = {};
@@ -203,7 +203,7 @@ TEST_CASE("Baraff LCP: random positive definite problems satisfy complementarity
 
 TEST_CASE("Baraff LCP: the old freeze case (redundant contacts) terminates") {
     // Four coplanar contacts of a box on the ground: A has rank 3.
-    World w = groundWorld(ContactSolverType::BaraffLcp);
+    World w = groundWorld(SolverType::BaraffLcp);
     RigidBody& box = w.addBody(Shape::box({0.5, 0.5, 0.5}), 1);
     box.x = {0, 0.49, 0};
     box.updateDerived();
@@ -217,7 +217,7 @@ TEST_CASE("Baraff LCP: the old freeze case (redundant contacts) terminates") {
 TEST_CASE("an overlap is pushed out slowly and does not launch the body") {
     // Sphere starting 5 cm into the floor, no gravity: it must end up resting on
     // the surface, not fly away with the push-out velocity.
-    for (ContactSolverType solver : kSolvers) {
+    for (SolverType solver : kSolvers) {
         INFO(name(solver));
         World w = groundWorld(solver);
         w.gravity = {};
@@ -236,7 +236,7 @@ TEST_CASE("an overlap is pushed out slowly and does not launch the body") {
 }
 
 TEST_CASE("a stack started 3 cm into itself settles without exploding") {
-    for (ContactSolverType solver : kSolvers) {
+    for (SolverType solver : kSolvers) {
         INFO(name(solver));
         World w = groundWorld(solver);
         w.substeps = 4;
@@ -268,7 +268,7 @@ TEST_CASE("a stack started 3 cm into itself settles without exploding") {
 TEST_CASE("a ball wider than the gap between two walls stays jammed and calm") {
     // No valid position exists (1 m ball, walls 95 cm apart). The solver can't
     // fix that, but it must not jitter, launch the ball or hang.
-    for (ContactSolverType solver : kSolvers) {
+    for (SolverType solver : kSolvers) {
         INFO(name(solver));
         World w;
         w.gravity = {};
@@ -294,7 +294,7 @@ TEST_CASE("a ball wider than the gap between two walls stays jammed and calm") {
 }
 
 TEST_CASE("Baraff LCP falls back to sequential impulses for very large contact sets") {
-    World w = groundWorld(ContactSolverType::BaraffLcp);
+    World w = groundWorld(SolverType::BaraffLcp);
     w.solver.settings.lcpMaxRows = 8; // a 3-box stack has 12 contact points
     std::vector<RigidBody*> boxes;
     for (int i = 0; i < 3; ++i) {

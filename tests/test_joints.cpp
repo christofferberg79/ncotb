@@ -10,16 +10,7 @@ namespace {
 
 constexpr Real kH = 1.0 / 240;
 constexpr Real kG = 9.81;
-constexpr ContactSolverType kSolvers[] = {ContactSolverType::SequentialImpulses,
-                                          ContactSolverType::BaraffLcp};
-
-RigidBody& place(World& w, const Shape& shape, Real mass, const Vec3& x, const Quat& q = {}) {
-    RigidBody& b = w.addBody(shape, mass);
-    b.x = x;
-    b.q = q;
-    b.updateDerived();
-    return b;
-}
+constexpr SolverType kSolvers[] = {SolverType::SequentialImpulses, SolverType::BaraffLcp};
 
 /// Period from successive downward zero crossings of f(t), over `seconds`.
 template <class F> Real measurePeriod(World& w, Real seconds, F f) {
@@ -42,7 +33,7 @@ template <class F> Real measurePeriod(World& w, Real seconds, F f) {
 } // namespace
 
 TEST_CASE("a ball on a ball joint swings with the pendulum period") {
-    for (ContactSolverType solver : kSolvers) {
+    for (SolverType solver : kSolvers) {
         INFO(name(solver));
         World w;
         w.solver.settings.type = solver;
@@ -50,7 +41,7 @@ TEST_CASE("a ball on a ball joint swings with the pendulum period") {
         const Real L = 1, r = 0.1, m = 1, theta0 = 5 * M_PI / 180;
         const Vec3 pivot{0, 2, 0};
         RigidBody& bob =
-            place(w, Shape::sphere(r), m, pivot + Vec3{L * std::sin(theta0), -L * std::cos(theta0), 0});
+            w.addBody(Shape::sphere(r), m, pivot + Vec3{L * std::sin(theta0), -L * std::cos(theta0), 0});
         BallJoint& j = w.addBallJoint(w.ground(), bob, pivot);
         Real E0 = w.totalEnergy();
         Real period = measurePeriod(w, 10, [&] { return bob.x.x; });
@@ -68,7 +59,7 @@ TEST_CASE("a bar on a hinge swings only about the hinge axis") {
     w.substeps = 4;
     const Vec3 pivot{0, 2, 0};
     const Real m = 2, half = 0.5;
-    RigidBody& bar = place(w, Shape::box({0.05, half, 0.05}), m, pivot - Vec3{0, half, 0});
+    RigidBody& bar = w.addBody(Shape::box({0.05, half, 0.05}), m, pivot - Vec3{0, half, 0});
     HingeJoint& hinge = w.addHinge(w.ground(), bar, pivot, {0, 0, 1});
     bar.setAngularVelocity({1.5, 0.8, 0.5}); // mostly off-axis: the hinge must remove it
     for (int i = 0; i < 24; ++i)
@@ -81,9 +72,9 @@ TEST_CASE("a bar on a hinge swings only about the hinge axis") {
     // physical pendulum period, small amplitude
     World w2;
     w2.substeps = 4;
-    RigidBody& b2 = place(w2, Shape::box({0.05, half, 0.05}), m,
-                          pivot + Vec3{half * std::sin(0.05), -half * std::cos(0.05), 0},
-                          Quat::fromAxisAngle({0, 0, 1}, 0.05));
+    RigidBody& b2 = w2.addBody(Shape::box({0.05, half, 0.05}), m,
+                               pivot + Vec3{half * std::sin(0.05), -half * std::cos(0.05), 0},
+                               Quat::fromAxisAngle({0, 0, 1}, 0.05));
     w2.addHinge(w2.ground(), b2, pivot, {0, 0, 1});
     Real I = m * (1.0 * 1.0 + 0.1 * 0.1) / 12 + m * half * half;
     Real period = measurePeriod(w2, 10, [&] { return b2.x.x; });
@@ -91,7 +82,7 @@ TEST_CASE("a bar on a hinge swings only about the hinge axis") {
 }
 
 TEST_CASE("a hanging chain is still and the top joint carries its whole weight") {
-    for (ContactSolverType solver : kSolvers) {
+    for (SolverType solver : kSolvers) {
         INFO(name(solver));
         World w;
         w.solver.settings.type = solver;
@@ -103,7 +94,7 @@ TEST_CASE("a hanging chain is still and the top joint carries its whole weight")
         const Vec3 pivot{0, 4, 0};
         for (int i = 0; i < n; ++i) {
             RigidBody& b =
-                place(w, Shape::box({0.04, link / 2, 0.04}), m, pivot - Vec3{0, link * (i + 0.5), 0});
+                w.addBody(Shape::box({0.04, link / 2, 0.04}), m, pivot - Vec3{0, link * (i + 0.5), 0});
             BallJoint& j = w.addBallJoint(*prev, b, pivot - Vec3{0, link * i, 0});
             if (i == 0) top = &j;
             prev = &b;
@@ -121,7 +112,7 @@ TEST_CASE("hinge limits stop a door, and a motor drives a wheel") {
     w.gravity = {};
     w.substeps = 4;
     // Door: hinge along y at its left edge, may open 0..90 degrees.
-    RigidBody& door = place(w, Shape::box({0.45, 1, 0.03}), 10, {0.45, 1, 0});
+    RigidBody& door = w.addBody(Shape::box({0.45, 1, 0.03}), 10, {0.45, 1, 0});
     HingeJoint& hinge = w.addHinge(w.ground(), door, {0, 1, 0}, {0, 1, 0});
     hinge.setLimits(0, M_PI / 2);
     // Spinning about the hinge, not about its centre: v = omega x r. (Spin about
@@ -135,7 +126,7 @@ TEST_CASE("hinge limits stop a door, and a motor drives a wheel") {
     CHECK(std::abs(door.omega().y) < 0.05);
 
     // Wheel: motor at 5 rad/s with limited torque: spins up at tau / I, then holds the speed.
-    RigidBody& wheel = place(w, Shape::box({0.3, 0.3, 0.05}), 2, {3, 1, 0});
+    RigidBody& wheel = w.addBody(Shape::box({0.3, 0.3, 0.05}), 2, {3, 1, 0});
     HingeJoint& axle = w.addHinge(w.ground(), wheel, {3, 1, 0}, {0, 0, 1});
     const Real tau = 0.5, I = 2 * (0.6 * 0.6 + 0.6 * 0.6) / 12;
     axle.setMotor(5, tau);
@@ -153,7 +144,8 @@ TEST_CASE("a slider allows motion only along its axis, with limits and a motor")
     w.substeps = 4;
     const Real angle = 30 * M_PI / 180;
     const Vec3 axis{std::cos(angle), -std::sin(angle), 0}; // downhill
-    RigidBody& box = place(w, Shape::box({0.2, 0.1, 0.1}), 1, {0, 2, 0}, Quat::fromAxisAngle({0, 1, 0}, 0.3));
+    RigidBody& box =
+        w.addBody(Shape::box({0.2, 0.1, 0.1}), 1, {0, 2, 0}, Quat::fromAxisAngle({0, 1, 0}, 0.3));
     SliderJoint& slider = w.addSlider(w.ground(), box, box.x, axis);
     slider.setLimits(-1, 1.5);
     Quat q0 = box.q;
@@ -183,7 +175,7 @@ TEST_CASE("a mass on a spring: equilibrium m g / k and period 2 pi sqrt(m / k)")
         w.integrator = integrator;
         const Real k = 100, m = 1;
         const Vec3 top{0, 3, 0};
-        RigidBody& mass = place(w, Shape::sphere(0.1), m, top - Vec3{0, 1, 0});
+        RigidBody& mass = w.addBody(Shape::sphere(0.1), m, top - Vec3{0, 1, 0});
         w.addSpring(w.ground(), top, mass, mass.x, k, 0, 1.0); // at rest length: it will drop and oscillate
         const Real equilibrium = top.y - 1 - m * kG / k;
         Real period = measurePeriod(w, 5, [&] { return mass.x.y - equilibrium; });
@@ -194,7 +186,7 @@ TEST_CASE("a mass on a spring: equilibrium m g / k and period 2 pi sqrt(m / k)")
     World w;
     const Real k = 100, m = 1, c = 2 * std::sqrt(k * m);
     const Vec3 top{0, 3, 0};
-    RigidBody& mass = place(w, Shape::sphere(0.1), m, top - Vec3{0, 1, 0});
+    RigidBody& mass = w.addBody(Shape::sphere(0.1), m, top - Vec3{0, 1, 0});
     w.addSpring(w.ground(), top, mass, mass.x, k, c, 1.0);
     const Real equilibrium = top.y - 1 - m * kG / k;
     Real lowest = mass.x.y;
@@ -210,9 +202,9 @@ TEST_CASE("joints and contacts work together: a hinged flap rests on a box") {
     World w;
     w.substeps = 4;
     w.addBody(Shape::plane(), 0);
-    place(w, Shape::box({0.3, 0.3, 0.3}), 0, {1.2, 0.3, 0}); // static support
+    w.addBody(Shape::box({0.3, 0.3, 0.3}), 0, {1.2, 0.3, 0}); // static support
     // 1.4 m flap hinged at x = 0, y = 0.6, resting on the support's top at x = 1.2
-    RigidBody& flap = place(w, Shape::box({0.7, 0.02, 0.2}), 3, {0.7, 0.62, 0});
+    RigidBody& flap = w.addBody(Shape::box({0.7, 0.02, 0.2}), 3, {0.7, 0.62, 0});
     w.addHinge(w.ground(), flap, {0, 0.62, 0}, {0, 0, 1});
     for (int i = 0; i < 240 * 2; ++i)
         w.step(kH);
@@ -223,8 +215,8 @@ TEST_CASE("joints and contacts work together: a hinged flap rests on a box") {
 TEST_CASE("bodies connected by a joint don't collide with each other") {
     World w;
     w.gravity = {};
-    RigidBody& a = place(w, Shape::box({0.5, 0.5, 0.5}), 1, {0, 0, 0});
-    RigidBody& b = place(w, Shape::box({0.5, 0.5, 0.5}), 1, {0.9, 0, 0}); // overlapping by 10 cm
+    RigidBody& a = w.addBody(Shape::box({0.5, 0.5, 0.5}), 1, {0, 0, 0});
+    RigidBody& b = w.addBody(Shape::box({0.5, 0.5, 0.5}), 1, {0.9, 0, 0}); // overlapping by 10 cm
     w.detectCollisions();
     CHECK(w.contacts().size() == 1);
     w.addBallJoint(a, b, {0.45, 0, 0});
@@ -233,7 +225,7 @@ TEST_CASE("bodies connected by a joint don't collide with each other") {
 }
 
 TEST_CASE("Newton's cradle passes the momentum to the last ball (gaps wider than the margin)") {
-    for (ContactSolverType solver : kSolvers) {
+    for (SolverType solver : kSolvers) {
         INFO(name(solver));
         World w;
         w.solver.settings.type = solver;
@@ -244,7 +236,7 @@ TEST_CASE("Newton's cradle passes the momentum to the last ball (gaps wider than
             Vec3 pivot{i * (2 * r + gap), 4, 0};
             Real a = i == 0 ? -a0 : 0;
             RigidBody& b =
-                place(w, Shape::sphere(r), 1, pivot + Vec3{len * std::sin(a), -len * std::cos(a), 0});
+                w.addBody(Shape::sphere(r), 1, pivot + Vec3{len * std::sin(a), -len * std::cos(a), 0});
             b.restitution = 1;
             b.friction = 0;
             w.addBallJoint(w.ground(), b, pivot);

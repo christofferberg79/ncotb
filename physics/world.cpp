@@ -37,6 +37,14 @@ Spring& World::addSpring(RigidBody& a, const Vec3& pa, RigidBody& b, const Vec3&
     return springs_.back();
 }
 
+RigidBody& World::addBody(const Shape& shape, Real mass, const Vec3& x, const Quat& q) {
+    RigidBody& b = addBody(shape, mass);
+    b.x = x;
+    b.q = q;
+    b.updateDerived();
+    return b;
+}
+
 void World::step(Real h) {
     if (integrator == IntegratorType::SemiImplicitEuler) {
         stepSemiImplicitEuler(h);

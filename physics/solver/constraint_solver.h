@@ -10,15 +10,15 @@ namespace ncotb {
 
 class RigidBody;
 
-enum class ContactSolverType {
+enum class SolverType {
     SequentialImpulses, ///< projected Gauss-Seidel with warm starting (Catto)
     BaraffLcp,          ///< exact LCP solve with Baraff's pivoting method
 };
 
-const char* name(ContactSolverType type);
+const char* name(SolverType type);
 
-struct ContactSettings {
-    ContactSolverType type = ContactSolverType::SequentialImpulses;
+struct SolverSettings {
+    SolverType type = SolverType::SequentialImpulses;
     int iterations = 10;             ///< sequential impulses: passes over all contacts (per phase)
     bool warmStart = true;           ///< sequential impulses: start from last step's impulses
     Real baumgarte = 0.2;            ///< fraction of the penetration removed per step
@@ -34,14 +34,15 @@ struct ContactSettings {
     Real jointMaxCorrection = 2.0; ///< joints: cap on the position-correction velocity
 };
 
-struct ContactSolverStats {
+struct SolverStats {
     int rows = 0;             ///< contact points solved
     int pivots = 0;           ///< Baraff LCP: pivots used
     bool lcpFailed = false;   ///< Baraff LCP: no solution found within the pivot limit
     bool lcpTooLarge = false; ///< Baraff LCP: too many rows, sequential impulses were used
 };
 
-/// Velocity-level contact solver. Each contact point is a constraint row
+/// Velocity-level constraint solver for contacts and joints. Each contact point is a
+/// constraint row
 ///
 ///     v_n = n . (v_a + w_a x r_a - v_b - w_b x r_b) >= target,   impulse >= 0,
 ///
@@ -63,9 +64,9 @@ struct ContactSolverStats {
 ///   3. relax(): solve again without the push-out, so the push-out moves the
 ///      bodies but doesn't stay as velocity; then the restitution pass for rows
 ///      hit while approaching faster than the threshold.
-class ContactSolver {
+class ConstraintSolver {
 public:
-    ContactSettings settings;
+    SolverSettings settings;
 
     /// Builds one row per contact point (impulses are stored in the contact
     /// points) and prepares the joints, which are solved in the same passes.
@@ -73,7 +74,7 @@ public:
     void solveVelocities();
     void relax();
 
-    const ContactSolverStats& stats() const { return stats_; }
+    const SolverStats& stats() const { return stats_; }
 
 private:
     struct Row {
@@ -115,7 +116,7 @@ private:
     std::vector<Row> rows_;
     std::vector<Joint*> joints_;
     Real h_ = 0;
-    ContactSolverStats stats_;
+    SolverStats stats_;
 };
 
 } // namespace ncotb

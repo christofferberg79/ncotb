@@ -263,15 +263,6 @@ void buildBrickWall(World& w) {
     }
 }
 
-/// Adds a dynamic body at x with orientation q.
-RigidBody& place(World& w, const Shape& shape, Real mass, const Vec3& x, const Quat& q = {}) {
-    RigidBody& b = w.addBody(shape, mass);
-    b.x = x;
-    b.q = q;
-    b.updateDerived();
-    return b;
-}
-
 const std::vector<Scene>& scenes() {
     static const std::vector<Scene> list = {
         {"Intermediate axis (Dzhanibekov)", false,
@@ -312,12 +303,12 @@ const std::vector<Scene>& scenes() {
              ramp.x = {6, 0, 0};
              ramp.q = Quat::fromAxisAngle({0, 0, 1}, 0.5);
              ramp.updateDerived();
-             place(w, Shape::box({1, 0.5, 1}), 0, {-3, 0.5, 0});
-             place(w, Shape::box({0.5, 0.5, 0.5}), 1, {-3, 1.5, 0.3}, Quat::fromAxisAngle({0, 1, 0}, 0.4));
-             place(w, Shape::sphere(0.5), 1, {0, 0.5, 0});
+             w.addBody(Shape::box({1, 0.5, 1}), 0, {-3, 0.5, 0});
+             w.addBody(Shape::box({0.5, 0.5, 0.5}), 1, {-3, 1.5, 0.3}, Quat::fromAxisAngle({0, 1, 0}, 0.4));
+             w.addBody(Shape::sphere(0.5), 1, {0, 0.5, 0});
              // Tilted box with its lowest corner on the ground.
              RigidBody& b2 =
-                 place(w, Shape::box({0.4, 0.3, 0.6}), 1, {1.4, 0, 0}, Quat::fromAxisAngle({1, 0, 1}, 0.6));
+                 w.addBody(Shape::box({0.4, 0.3, 0.6}), 1, {1.4, 0, 0}, Quat::fromAxisAngle({1, 0, 1}, 0.6));
              Real lowest = 0;
              for (int k = 0; k < 8; ++k) {
                  Vec3 c{k & 1 ? 0.4 : -0.4, k & 2 ? 0.3 : -0.3, k & 4 ? 0.6 : -0.6};
@@ -337,7 +328,7 @@ const std::vector<Scene>& scenes() {
                  bool box = i % 2 == 0;
                  Shape shape = box ? Shape::box({0.35, 0.25, 0.3}) : Shape::sphere(0.3);
                  Vec3 x{(i % 4 - 1.5) * 1.1, 2.0 + 0.8 * i, (i % 3 - 1) * 0.9};
-                 RigidBody& b = place(w, shape, 1.0, x, Quat::fromAxisAngle({1, 2, 3}, 0.7 * i));
+                 RigidBody& b = w.addBody(shape, 1.0, x, Quat::fromAxisAngle({1, 2, 3}, 0.7 * i));
                  b.restitution = box ? 0.2 : 0.5;
                  b.setAngularVelocity({0.5, 0.8 * (i % 5 - 2), 0.3});
              }
@@ -347,12 +338,12 @@ const std::vector<Scene>& scenes() {
              w.gravity = {0, -9.81, 0};
              w.addBody(Shape::plane(), 0).restitution = 0;
              for (int i = 0; i < 6; ++i)
-                 place(w, Shape::box({0.5, 0.5, 0.5}), 1, {-2, 0.5 + 1.0 * i, 0}).restitution = 0;
+                 w.addBody(Shape::box({0.5, 0.5, 0.5}), 1, {-2, 0.5 + 1.0 * i, 0}).restitution = 0;
              // pyramid of 3 + 2 + 1 boxes
              for (int row = 0; row < 3; ++row)
                  for (int k = 0; k < 3 - row; ++k)
-                     place(w, Shape::box({0.4, 0.4, 0.4}), 1,
-                           {1.5 + (k - (2 - row) / 2.0) * 0.82, 0.4 + 0.8 * row, 0})
+                     w.addBody(Shape::box({0.4, 0.4, 0.4}), 1,
+                               {1.5 + (k - (2 - row) / 2.0) * 0.82, 0.4 + 0.8 * row, 0})
                          .restitution = 0;
          }},
         {"Friction ramp (mu = 0.2, 0.4, 0.6, 0.8)", true,
@@ -365,18 +356,18 @@ const std::vector<Scene>& scenes() {
              const Quat q = Quat::fromAxisAngle({0, 0, 1}, -theta);
              const Vec3 n = rotate(q, {0, 1, 0}), uphill = -rotate(q, {1, 0, 0}), across{0, 0, 1};
              const Vec3 centre{0, 2.2, 0};
-             RigidBody& ramp = place(w, Shape::box({4.5, 0.1, 3.2}), 0, centre - n * 0.1, q);
+             RigidBody& ramp = w.addBody(Shape::box({4.5, 0.1, 3.2}), 0, centre - n * 0.1, q);
              ramp.friction = 1; // combined mu = sqrt(mu_box * 1), so mu_box = mu^2
              const Real mus[4] = {0.2, 0.4, 0.6, 0.8};
              for (int i = 0; i < 4; ++i) {
-                 RigidBody& b = place(w, Shape::box({0.3, 0.2, 0.3}), 1,
-                                      centre + uphill * 2.5 + across * (i - 1.5) * 0.9 + n * 0.2, q);
+                 RigidBody& b = w.addBody(Shape::box({0.3, 0.2, 0.3}), 1,
+                                          centre + uphill * 2.5 + across * (i - 1.5) * 0.9 + n * 0.2, q);
                  b.friction = mus[i] * mus[i];
                  b.restitution = 0;
              }
              for (int i = 0; i < 2; ++i) {
-                 RigidBody& ball = place(w, Shape::sphere(0.25), 1,
-                                         centre + uphill * 3.5 + across * (i * 2 - 1) * 2.4 + n * 0.25);
+                 RigidBody& ball = w.addBody(Shape::sphere(0.25), 1,
+                                             centre + uphill * 3.5 + across * (i * 2 - 1) * 2.4 + n * 0.25);
                  ball.friction = 0.25;
                  ball.restitution = 0;
              }
@@ -399,15 +390,15 @@ const std::vector<Scene>& scenes() {
                  w.gravity = {0, -9.81, 0};
                  // Simple pendulum: a ball on a ball joint, released at 40 degrees.
                  const Vec3 p1{-4.5, 4, 0};
-                 RigidBody& bob =
-                     place(w, Shape::sphere(0.2), 1, p1 + Vec3{1.5 * std::sin(0.7), -1.5 * std::cos(0.7), 0});
+                 RigidBody& bob = w.addBody(Shape::sphere(0.2), 1,
+                                            p1 + Vec3{1.5 * std::sin(0.7), -1.5 * std::cos(0.7), 0});
                  w.addBallJoint(w.ground(), bob, p1);
                  // Chain of 8 links hanging from a point, started sideways.
                  const Vec3 p2{-1.8, 4, 0};
                  RigidBody* prev = &w.ground();
                  for (int i = 0; i < 8; ++i) {
                      RigidBody& link =
-                         place(w, Shape::box({0.15, 0.04, 0.04}), 0.4, p2 + Vec3{0.3 * i + 0.15, 0, 0});
+                         w.addBody(Shape::box({0.15, 0.04, 0.04}), 0.4, p2 + Vec3{0.3 * i + 0.15, 0, 0});
                      w.addBallJoint(*prev, link, p2 + Vec3{0.3 * i, 0, 0});
                      prev = &link;
                  }
@@ -415,9 +406,9 @@ const std::vector<Scene>& scenes() {
                  const Vec3 p3{1.2, 4, 0};
                  Quat tilt = Quat::fromAxisAngle({0, 0, 1}, 2.2);
                  Vec3 down = rotate(tilt, {0, -1, 0});
-                 RigidBody& upper = place(w, Shape::box({0.04, 0.4, 0.04}), 1, p3 + down * 0.4, tilt);
+                 RigidBody& upper = w.addBody(Shape::box({0.04, 0.4, 0.04}), 1, p3 + down * 0.4, tilt);
                  w.addHinge(w.ground(), upper, p3, {0, 0, 1});
-                 RigidBody& lower = place(w, Shape::box({0.04, 0.4, 0.04}), 1, p3 + down * 1.2, tilt);
+                 RigidBody& lower = w.addBody(Shape::box({0.04, 0.4, 0.04}), 1, p3 + down * 1.2, tilt);
                  w.addHinge(upper, lower, p3 + down * 0.8, {0, 0, 1});
                  // Newton's cradle: 5 elastic balls, the first raised. The 3 cm gaps
                  // are wider than the contact margin, so each impact is a separate
@@ -427,8 +418,8 @@ const std::vector<Scene>& scenes() {
                  for (int i = 0; i < 5; ++i) {
                      Vec3 pivot{4 + i * (2 * r + gap), 4, 0};
                      Real a = i == 0 ? -0.6 : 0;
-                     RigidBody& ball = place(w, Shape::sphere(r), 1,
-                                             pivot + Vec3{len * std::sin(a), -len * std::cos(a), 0});
+                     RigidBody& ball = w.addBody(Shape::sphere(r), 1,
+                                                 pivot + Vec3{len * std::sin(a), -len * std::cos(a), 0});
                      ball.restitution = 1;
                      ball.friction = 0;
                      ball.userData = packColor(190, 195, 205);
@@ -449,7 +440,7 @@ const std::vector<Scene>& scenes() {
                  const Real dampings[3] = {0, 1.5, 2 * std::sqrt(k * m)};
                  for (int i = 0; i < 3; ++i) {
                      Vec3 top{-3.5 + i * 1.0, 4.5, 0};
-                     RigidBody& mass = place(w, Shape::box({0.15, 0.15, 0.15}), m, top - Vec3{0, 1.2, 0});
+                     RigidBody& mass = w.addBody(Shape::box({0.15, 0.15, 0.15}), m, top - Vec3{0, 1.2, 0});
                      w.addSpring(w.ground(), top, mass, mass.x + Vec3{0, 0.15, 0}, k, dampings[i], 1.05);
                  }
                  // A crate hanging from four springs, released from their rest
@@ -458,7 +449,7 @@ const std::vector<Scene>& scenes() {
                  // stiffness, which is why real suspensions guide them.)
                  const Vec3 h{0.8, 0.15, 0.5};
                  RigidBody& crate =
-                     place(w, Shape::box(h), 20, {2.2, 2.05, 0}, Quat::fromAxisAngle({1, 0, 0}, 0.1));
+                     w.addBody(Shape::box(h), 20, {2.2, 2.05, 0}, Quat::fromAxisAngle({1, 0, 0}, 0.1));
                  crate.userData = packColor(170, 130, 80);
                  const Real ks = 330, cs = 25; // static stretch m g / 4k = 0.15 m, damping ratio ~0.3
                  for (int sx : {-1, 1})
@@ -476,34 +467,34 @@ const std::vector<Scene>& scenes() {
                  w.gravity = {0, -9.81, 0};
                  w.addBody(Shape::plane(), 0);
                  // Door: hinged on its left edge, opens up to 100 degrees either way.
-                 RigidBody& door = place(w, Shape::box({0.45, 1.0, 0.03}), 15, {-3.05, 1.02, 0});
+                 RigidBody& door = w.addBody(Shape::box({0.45, 1.0, 0.03}), 15, {-3.05, 1.02, 0});
                  door.userData = packColor(150, 110, 70);
                  w.addHinge(w.ground(), door, {-3.5, 1.02, 0}, {0, 1, 0}).setLimits(-1.75, 1.75);
                  // Turntable: a disc driven at 0.8 rad/s, carrying three boxes.
-                 RigidBody& table = place(w, Shape::box({1.2, 0.05, 1.2}), 40, {0.5, 0.35, 0});
+                 RigidBody& table = w.addBody(Shape::box({1.2, 0.05, 1.2}), 40, {0.5, 0.35, 0});
                  table.userData = packColor(120, 125, 135);
                  w.addHinge(w.ground(), table, table.x, {0, 1, 0}).setMotor(0.8, 400);
-                 place(w, Shape::box({0.2, 0.15, 0.2}), 0, {0.5, 0.15, 0}); // pedestal under the disc
+                 w.addBody(Shape::box({0.2, 0.15, 0.2}), 0, {0.5, 0.15, 0}); // pedestal under the disc
                  for (int i = 0; i < 3; ++i) {
                      Real a = i * 2.1;
-                     place(w, Shape::box({0.15, 0.15, 0.15}), 1,
-                           {0.5 + 0.8 * std::cos(a), 0.55, 0.8 * std::sin(a)})
+                     w.addBody(Shape::box({0.15, 0.15, 0.15}), 1,
+                               {0.5 + 0.8 * std::cos(a), 0.55, 0.8 * std::sin(a)})
                          .friction = 0.8;
                  }
                  // Elevator: a platform on a vertical slider moving between 0 and 2 m.
-                 RigidBody& platform = place(w, Shape::box({0.6, 0.05, 0.6}), 30, {3.5, 0.3, 0});
+                 RigidBody& platform = w.addBody(Shape::box({0.6, 0.05, 0.6}), 30, {3.5, 0.3, 0});
                  platform.userData = packColor(120, 125, 135);
                  SliderJoint& lift = w.addSlider(w.ground(), platform, platform.x, {0, 1, 0});
                  lift.setLimits(0, 2);
                  lift.setMotor(0.6, 2000);
-                 place(w, Shape::box({0.2, 0.2, 0.2}), 2, {3.5, 0.55, 0}).friction = 0.8;
+                 w.addBody(Shape::box({0.2, 0.2, 0.2}), 2, {3.5, 0.55, 0}).friction = 0.8;
              },
          .camera = OrbitCamera{.yaw = 0.55f, .pitch = 0.3f, .distance = 11.0f, .target = {0.2f, 0.9f, 0}},
          .showVectors = false,
          .actionLabel = "Throw ball",
          .action =
              [](World& w) {
-                 RigidBody& ball = place(w, Shape::sphere(0.15), 3, {-2.7, 1.3, 4});
+                 RigidBody& ball = w.addBody(Shape::sphere(0.15), 3, {-2.7, 1.3, 4});
                  ball.userData = packColor(40, 42, 48);
                  ball.setLinearVelocity({0, 1.5, -9});
              },
@@ -523,7 +514,7 @@ const std::vector<Scene>& scenes() {
              w.gravity = {0, -9.81, 0};
              w.addBody(Shape::plane(), 0).restitution = 0;
              for (int i = 0; i < 5; ++i)
-                 place(w, Shape::sphere(0.3), 1, {(i - 2) * 1.0, 2.3, 0}).restitution = 0.25 * i;
+                 w.addBody(Shape::sphere(0.3), 1, {(i - 2) * 1.0, 2.3, 0}).restitution = 0.25 * i;
          }},
     };
     return list;
@@ -714,15 +705,15 @@ struct App {
     }
 
     void solverGui() {
-        if (!ImGui::CollapsingHeader("Contact solver", ImGuiTreeNodeFlags_DefaultOpen)) return;
-        ContactSettings& cs = world.solver.settings;
+        if (!ImGui::CollapsingHeader("Solver (contacts and joints)", ImGuiTreeNodeFlags_DefaultOpen)) return;
+        SolverSettings& cs = world.solver.settings;
         if (ImGui::BeginCombo("Solver", name(cs.type))) {
-            for (ContactSolverType t : {ContactSolverType::SequentialImpulses, ContactSolverType::BaraffLcp})
+            for (SolverType t : {SolverType::SequentialImpulses, SolverType::BaraffLcp})
                 if (ImGui::Selectable(name(t), t == cs.type)) cs.type = t;
             ImGui::EndCombo();
         }
         if (ImGui::SliderInt("Substeps", &contactSubsteps, 1, 16)) world.substeps = contactSubsteps;
-        ImGui::BeginDisabled(cs.type != ContactSolverType::SequentialImpulses);
+        ImGui::BeginDisabled(cs.type != SolverType::SequentialImpulses);
         ImGui::SliderInt("Iterations", &cs.iterations, 1, 50);
         ImGui::Checkbox("Warm start", &cs.warmStart);
         ImGui::EndDisabled();
@@ -734,14 +725,14 @@ struct App {
             cs.maxPushVelocity = maxPush;
         ImGui::Checkbox("Relax (remove push-out velocity)", &cs.relax);
         ImGui::Checkbox("Friction", &cs.friction);
-        if (cs.type == ContactSolverType::BaraffLcp && cs.friction)
+        if (cs.type == SolverType::BaraffLcp && cs.friction)
             ImGui::SliderInt("Normal/friction rounds", &cs.staggers, 1, 10);
         ImGui::Checkbox("Resolve contacts", &world.resolveContacts);
-        const ContactSolverStats& st = world.solver.stats();
-        if (cs.type == ContactSolverType::BaraffLcp && st.lcpTooLarge)
+        const SolverStats& st = world.solver.stats();
+        if (cs.type == SolverType::BaraffLcp && st.lcpTooLarge)
             ImGui::TextColored({1, 0.7f, 0.3f, 1}, "%d rows > %d: used sequential impulses", st.rows,
                                cs.lcpMaxRows);
-        else if (cs.type == ContactSolverType::BaraffLcp)
+        else if (cs.type == SolverType::BaraffLcp)
             ImGui::Text("%d rows, %d pivots%s", st.rows, st.pivots, st.lcpFailed ? "  PIVOT LIMIT HIT" : "");
         else
             ImGui::Text("%d rows", st.rows);

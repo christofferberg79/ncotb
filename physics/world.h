@@ -5,7 +5,7 @@
 #include "forces/spring.h"
 #include "integration/integrator.h"
 #include "joints/joint.h"
-#include "solver/contact_solver.h"
+#include "solver/constraint_solver.h"
 
 #include <memory>
 #include <vector>
@@ -23,6 +23,8 @@ public:
     IntegratorType integrator = IntegratorType::SemiImplicitEuler;
 
     RigidBody& addBody(const Shape& shape, Real mass);
+    /// Adds a body at position x with orientation q (at rest).
+    RigidBody& addBody(const Shape& shape, Real mass, const Vec3& x, const Quat& q = {});
     /// Removes all bodies, joints and springs; settings (gravity, integrator) are kept.
     void clear() {
         joints_.clear();
@@ -59,8 +61,8 @@ public:
     /// (contacts are detected for display, joints are ignored).
     void step(Real h);
 
-    /// Contact solver and its settings (solver type, iterations, Baumgarte, ...).
-    ContactSolver solver;
+    /// Constraint solver for contacts and joints, and its settings (type, iterations, ...).
+    ConstraintSolver solver;
     /// Substeps per step (semi-implicit Euler with contacts).
     int substeps = 1;
     /// false: contacts are only detected, bodies pass through each other.

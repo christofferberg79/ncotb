@@ -65,4 +65,11 @@ inline Vec3 normalize(const Vec3& v) {
     return len > 0 ? v / len : Vec3{};
 }
 
+/// A unit vector perpendicular to the unit vector n. It depends only on n, so
+/// the same n always gives the same vector (stable tangents for resting contacts).
+inline Vec3 anyPerpendicular(const Vec3& n) {
+    Vec3 axis = std::abs(n.x) < 0.57 ? Vec3{1, 0, 0} : Vec3{0, 1, 0};
+    return normalize(cross(n, axis));
+}
+
 } // namespace ncotb

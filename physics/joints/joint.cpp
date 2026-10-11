@@ -9,12 +9,6 @@ namespace ncotb {
 
 namespace {
 
-/// A unit vector perpendicular to n.
-Vec3 perpendicular(const Vec3& n) {
-    Vec3 axis = std::abs(n.x) < 0.57 ? Vec3{1, 0, 0} : Vec3{0, 1, 0};
-    return normalize(cross(n, axis));
-}
-
 /// Correction velocity beta/h * error, capped in magnitude.
 Real correction(Real error, Real h, const JointSettings& s) {
     return std::clamp(s.baumgarte / h * error, -s.maxCorrection, s.maxCorrection);
@@ -81,7 +75,7 @@ void BallJoint::solve(bool useBias) {
 HingeJoint::HingeJoint(RigidBody& a, RigidBody& b, const Vec3& anchor, const Vec3& axis)
     : BallJoint(a, b, anchor) {
     Vec3 n = normalize(axis);
-    Vec3 ref = perpendicular(n);
+    Vec3 ref = anyPerpendicular(n);
     localAxisA_ = transpose(a.R()) * n;
     localAxisB_ = transpose(b.R()) * n;
     localRefA_ = transpose(a.R()) * ref;
@@ -113,7 +107,7 @@ void HingeJoint::prepare(Real h, const JointSettings& settings) {
     BallJoint::prepare(h, settings);
     h_ = h;
     axis_ = axis();
-    t1_ = perpendicular(axis_);
+    t1_ = anyPerpendicular(axis_);
     t2_ = cross(axis_, t1_);
     const Mat3 I = a_->Iinv() + b_->Iinv();
 
@@ -236,7 +230,7 @@ void SliderJoint::prepare(Real h, const JointSettings& settings) {
     rB_ = b_->R() * localB_;
     d_ = (b_->x + rB_) - (a_->x + rA_);
     axis_ = axis();
-    Vec3 n1 = perpendicular(axis_), n2 = cross(axis_, n1);
+    Vec3 n1 = anyPerpendicular(axis_), n2 = cross(axis_, n1);
 
     Real keep[2] = {perp_[0].impulse, perp_[1].impulse};
     perp_[0] = makeRow(n1, dot(d_, n1), h, settings);

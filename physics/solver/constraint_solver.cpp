@@ -1,4 +1,4 @@
-#include "solver/contact_solver.h"
+#include "solver/constraint_solver.h"
 
 #include "body/rigid_body.h"
 #include "solver/lcp.h"
@@ -19,40 +19,33 @@ Real effectiveMassInverse(const RigidBody& a, const RigidBody& b, const Vec3& ra
     Real K = a.invMass() + b.invMass() + dot(raxd, a.Iinv() * raxd) + dot(rbxd, b.Iinv() * rbxd);
     return K > 0 ? 1 / K : 0;
 }
-
-/// A tangent perpendicular to n that depends only on n, so it is the same every
-/// step for a resting contact.
-Vec3 tangentOf(const Vec3& n) {
-    Vec3 axis = std::abs(n.x) < 0.57 ? Vec3{1, 0, 0} : Vec3{0, 1, 0};
-    return normalize(cross(n, axis));
-}
 } // namespace
 
-const char* name(ContactSolverType type) {
+const char* name(SolverType type) {
     switch (type) {
-    case ContactSolverType::SequentialImpulses: return "Sequential impulses";
-    case ContactSolverType::BaraffLcp: return "Baraff LCP (pivoting)";
+    case SolverType::SequentialImpulses: return "Sequential impulses";
+    case SolverType::BaraffLcp: return "Baraff LCP (pivoting)";
     }
     return "?";
 }
 
-Vec3 ContactSolver::relativeVelocity(const Row& r) const {
+Vec3 ConstraintSolver::relativeVelocity(const Row& r) const {
     Vec3 va = r.a->v() + cross(r.a->omega(), r.ra);
     Vec3 vb = r.b->v() + cross(r.b->omega(), r.rb);
     return va - vb;
 }
 
-void ContactSolver::applyRowImpulse(const Row& r, const Vec3& J) const {
+void ConstraintSolver::applyRowImpulse(const Row& r, const Vec3& J) const {
     r.a->applyImpulseAtOffset(J, r.ra);
     r.b->applyImpulseAtOffset(-J, r.rb);
 }
 
-bool ContactSolver::useLcp() const {
-    return settings.type == ContactSolverType::BaraffLcp && !stats_.lcpTooLarge;
+bool ConstraintSolver::useLcp() const {
+    return settings.type == SolverType::BaraffLcp && !stats_.lcpTooLarge;
 }
 
-void ContactSolver::prepare(std::vector<ContactManifold>& contacts, const std::vector<Joint*>& joints,
-                            Real h) {
+void ConstraintSolver::prepare(std::vector<ContactManifold>& contacts, const std::vector<Joint*>& joints,
+                               Real h) {
     rows_.clear();
     stats_ = {};
     h_ = h;
@@ -71,7 +64,7 @@ void ContactSolver::prepare(std::vector<ContactManifold>& contacts, const std::v
             r.a = &a;
             r.b = &b;
             r.n = m.normal;
-            r.t1 = tangentOf(r.n);
+            r.t1 = anyPerpendicular(r.n);
             r.t2 = cross(r.n, r.t1);
             r.mu = mu;
             r.ra = r.ra0 = cp.position - a.x;
@@ -99,10 +92,10 @@ void ContactSolver::prepare(std::vector<ContactManifold>& contacts, const std::v
         }
     }
     stats_.rows = int(rows_.size());
-    stats_.lcpTooLarge = settings.type == ContactSolverType::BaraffLcp && stats_.rows > settings.lcpMaxRows;
+    stats_.lcpTooLarge = settings.type == SolverType::BaraffLcp && stats_.rows > settings.lcpMaxRows;
 }
 
-void ContactSolver::solveVelocities() {
+void ConstraintSolver::solveVelocities() {
     for (Row& r : rows_) {
         if (r.depth0 < 0) {
             r.target = r.depth0 / h_; // still apart: may close the gap, not pass it
@@ -132,7 +125,7 @@ void ContactSolver::solveVelocities() {
     storeFriction();
 }
 
-Real ContactSolver::updateAnchors(Row& r) const {
+Real ConstraintSolver::updateAnchors(Row& r) const {
     // How far the two contact points moved, with the offsets turned along with
     // the bodies. The lever arms ra, rb themselves stay as they were: a sphere's
     // contact point stays at the bottom while the sphere turns, and a rotated
@@ -145,7 +138,7 @@ Real ContactSolver::updateAnchors(Row& r) const {
     return r.depth0 - dot(r.n, movedA - movedB);
 }
 
-void ContactSolver::relax() {
+void ConstraintSolver::relax() {
     if (rows_.empty() && joints_.empty()) return;
 
     if (settings.relax) {
@@ -190,7 +183,7 @@ void ContactSolver::relax() {
 
 /// Friction for one point: drive the sliding velocity to zero, keeping the
 /// accumulated friction impulse inside the disc |f| <= mu * normal impulse.
-void ContactSolver::solveFriction(Row& r) const {
+void ConstraintSolver::solveFriction(Row& r) const {
     if (r.mu <= 0) return;
     Vec3 v = relativeVelocity(r);
     Real n1 = r.lt1 - dot(r.t1, v) * r.invKt1;
@@ -209,7 +202,7 @@ void ContactSolver::solveFriction(Row& r) const {
 
 /// Final clamp onto the Coulomb cone (the normal impulse may have shrunk after
 /// friction was last solved), then store the friction impulse.
-void ContactSolver::storeFriction() {
+void ConstraintSolver::storeFriction() {
     for (Row& r : rows_) {
         Real limit = r.mu * *r.impulse;
         Real len = std::hypot(r.lt1, r.lt2);
@@ -226,7 +219,7 @@ void ContactSolver::storeFriction() {
 /// Projected Gauss-Seidel: solve one row at a time with the others fixed,
 /// clamping the accumulated impulse (not the increment). Friction first: the
 /// normal rows come last so non-penetration is what holds best.
-void ContactSolver::sequentialImpulses(bool withFriction, bool withJoints, bool useBias) {
+void ConstraintSolver::sequentialImpulses(bool withFriction, bool withJoints, bool useBias) {
     for (int it = 0; it < settings.iterations; ++it) {
         if (withJoints)
             for (Joint* j : joints_)
@@ -245,7 +238,7 @@ void ContactSolver::sequentialImpulses(bool withFriction, bool withJoints, bool 
 /// joints held fixed, then friction and joint passes with the normal impulses
 /// held fixed, repeated. (Joints are equalities, which the pivoting method for
 /// inequalities doesn't handle, so they are solved like friction.)
-void ContactSolver::baraffWithFriction(bool useBias) {
+void ConstraintSolver::baraffWithFriction(bool useBias) {
     const bool friction = settings.friction && !rows_.empty();
     const bool joints = !joints_.empty();
     const int rounds = friction || joints ? std::max(settings.staggers, 1) : 1;
@@ -271,7 +264,7 @@ void ContactSolver::baraffWithFriction(bool useBias) {
 /// Builds A = J M^-1 J^T and b = v_n - target from the current velocities and
 /// solves the LCP exactly. replace: the result is the whole impulse; otherwise
 /// it is added on top of the impulses already applied.
-void ContactSolver::baraffLcp(bool replace) {
+void ConstraintSolver::baraffLcp(bool replace) {
     const int n = int(rows_.size());
     DenseMatrix A(n);
     std::vector<Real> b(static_cast<size_t>(n)), x;

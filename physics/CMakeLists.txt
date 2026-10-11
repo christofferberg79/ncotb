@@ -3,7 +3,7 @@ add_library(physics STATIC
   collision/collide.cpp
   integration/integrator.cpp
   joints/joint.cpp
-  solver/contact_solver.cpp
+  solver/constraint_solver.cpp
   solver/lcp.cpp
   world.cpp)
 target_include_directories(physics PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
