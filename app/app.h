@@ -22,6 +22,8 @@ struct App {
     float forceScale = 0.05f; ///< metres per newton for the force arrows (0: off)
     int contactSubsteps = 4;  ///< substeps in contact scenes
     OrbitCamera orbit;
+    OrbitCamera startView;                    ///< the scene's starting view, for "reset view" (C)
+    static constexpr float kPanelWidth = 360; ///< control panel width (pixels)
     bool autoActionDone = false;
     Vec3 sceneGravity{}; ///< the scene's own gravity, for the on/off switch
     double accumulator = 0;
@@ -40,6 +42,7 @@ struct App {
     Real energy0 = 0; ///< total energy when the scene was loaded
 
     void loadScene(int i);
+    void resetView() { orbit = startView; }
     /// The scene's action (e.g. "Fire"), if it has one.
     void runAction();
     /// Runs as many fixed steps as fit in frameTime (scaled by timeScale).

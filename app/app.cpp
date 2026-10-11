@@ -19,7 +19,11 @@ void App::loadScene(int i) {
     world.clear();
     const Scene& scene = scenes()[i];
     if (scene.substeps > 0) contactSubsteps = scene.substeps;
-    if (scene.camera) orbit = *scene.camera;
+    // Start from the scene's view, shifted right by half the panel's width so the
+    // scene sits in the middle of the area next to the panel.
+    startView = scene.camera.value_or(OrbitCamera{});
+    startView.panPixels((kPanelWidth + 10) / 2, 0, float(GetScreenHeight()));
+    resetView();
     showVectors = scene.showVectors;
     showContacts = scene.showContacts;
     autoActionDone = false;
@@ -87,7 +91,7 @@ void App::advance(double frameTime) {
 
 void App::gui() {
     ImGui::SetNextWindowPos({10, 10}, ImGuiCond_FirstUseEver);
-    ImGui::SetNextWindowSize({360, 0}, ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowSize({kPanelWidth, 0}, ImGuiCond_FirstUseEver);
     ImGui::Begin("ncotb");
 
     if (ImGui::BeginCombo("Scene", scenes()[sceneIndex].name)) {
@@ -161,7 +165,8 @@ void App::gui() {
 
 void App::footer() {
     ImGui::Separator();
-    ImGui::TextDisabled("Drag: orbit   Wheel: zoom   %d FPS", GetFPS());
+    ImGui::TextDisabled("Drag: orbit   Shift+drag: pan   Scroll: zoom");
+    ImGui::TextDisabled("Arrows, Q/E: move   C: reset view   %d FPS", GetFPS());
     ImGui::End();
 }
 

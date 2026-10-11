@@ -25,7 +25,16 @@ Our code (physics, app, tests) builds with `-Wall -Wextra -Wpedantic -Wshadow -W
 warning fails the build (`-DNCOTB_WERROR=OFF` to relax that locally). `ctest` also runs a `format`
 test that fails if a file differs from `.clang-format` (fix with the "format all" task).
 
-Controls: drag to orbit, wheel to zoom, Space pause, S single step, R reset, F scene action.
+Controls:
+
+| Input | Action |
+|---|---|
+| drag | orbit |
+| Shift + drag, or right-drag (two-finger click + drag) | pan |
+| scroll (two fingers) | zoom |
+| arrow keys (Shift: faster), Q / E | move the view's centre over the ground, down / up |
+| C | reset the view |
+| Space / S / R / F | pause / single step / reset scene / scene action |
 
 ### VS Code
 
