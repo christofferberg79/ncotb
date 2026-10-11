@@ -291,15 +291,18 @@ const std::vector<Scene>& scenes() {
                  RigidBody& door = w.addBody(Shape::box({0.45, 1.0, 0.03}), 15, {-3.05, 1.02, 0});
                  door.userData = packColor(150, 110, 70);
                  w.addHinge(w.ground(), door, {-3.5, 1.02, 0}, {0, 1, 0}).setLimits(-1.75, 1.75);
-                 // Turntable: a disc driven at 0.8 rad/s, carrying three boxes.
-                 RigidBody& table = w.addBody(Shape::box({1.2, 0.05, 1.2}), 40, {0.5, 0.35, 0});
+                 // Turntable: a disc driven at 0.8 rad/s, carrying three boxes. Its
+                 // underside (0.25 m) is lower than the boxes are tall (0.3 m), so a
+                 // box that slides off gets swept along by the edge. (At exactly the
+                 // same height the disc would glide flat over the box tops.)
+                 RigidBody& table = w.addBody(Shape::box({1.2, 0.05, 1.2}), 40, {0.5, 0.30, 0});
                  table.userData = packColor(120, 125, 135);
                  w.addHinge(w.ground(), table, table.x, {0, 1, 0}).setMotor(0.8, 400);
-                 w.addBody(Shape::box({0.2, 0.15, 0.2}), 0, {0.5, 0.15, 0}); // pedestal under the disc
+                 w.addBody(Shape::box({0.2, 0.125, 0.2}), 0, {0.5, 0.125, 0}); // pedestal under the disc
                  for (int i = 0; i < 3; ++i) {
                      Real a = i * 2.1;
                      w.addBody(Shape::box({0.15, 0.15, 0.15}), 1,
-                               {0.5 + 0.8 * std::cos(a), 0.55, 0.8 * std::sin(a)})
+                               {0.5 + 0.8 * std::cos(a), 0.50, 0.8 * std::sin(a)})
                          .friction = 0.8;
                  }
                  // Elevator: a platform on a vertical slider moving between 0 and 2 m.
