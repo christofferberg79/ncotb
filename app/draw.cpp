@@ -6,8 +6,9 @@
 
 namespace ncotb::app {
 
-void drawBody(const RigidBody& b, Color color) {
-    // Column-major 4x4 transform from R and x.
+namespace {
+/// Pushes the body's transform (R and x) onto the matrix stack.
+void pushTransform(const RigidBody& b) {
     const Mat3& R = b.R();
     // clang-format off
     float m[16] = {float(R.m[0][0]), float(R.m[1][0]), float(R.m[2][0]), 0,
@@ -17,6 +18,24 @@ void drawBody(const RigidBody& b, Color color) {
     // clang-format on
     rlPushMatrix();
     rlMultMatrixf(m);
+}
+} // namespace
+
+void drawOutline(const RigidBody& b, Color color) {
+    pushTransform(b);
+    const Shape& s = b.shape();
+    if (s.type == Shape::Type::Box) {
+        ::Vector3 size = toRl(2 * s.halfExtents);
+        for (float grow : {1.02f, 1.04f}) // two shells: a bolder line
+            DrawCubeWiresV({0, 0, 0}, {size.x * grow, size.y * grow, size.z * grow}, color);
+    } else if (s.type == Shape::Type::Sphere) {
+        DrawSphereWires({0, 0, 0}, float(s.radius) * 1.04f, 10, 12, color);
+    }
+    rlPopMatrix();
+}
+
+void drawBody(const RigidBody& b, Color color) {
+    pushTransform(b);
     const Shape& s = b.shape();
     switch (s.type) {
     case Shape::Type::Box: {

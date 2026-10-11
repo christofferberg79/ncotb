@@ -1,6 +1,7 @@
 #pragma once
 
 #include "camera.h"
+#include "interaction.h"
 #include "world.h"
 
 #include <array>
@@ -22,6 +23,7 @@ struct App {
     float forceScale = 0.05f; ///< metres per newton for the force arrows (0: off)
     int contactSubsteps = 4;  ///< substeps in contact scenes
     OrbitCamera orbit;
+    Interaction interaction;
     OrbitCamera startView;                    ///< the scene's starting view, for "reset view" (C)
     static constexpr float kPanelWidth = 360; ///< control panel width (pixels)
     bool autoActionDone = false;
@@ -50,6 +52,9 @@ struct App {
         orbit = view;
     }
     void resetView() { orbit = startView; }
+    /// Keyboard and mouse for this frame: interaction first (it may take the
+    /// mouse), then the camera, then the keys for pause, step, reset, ...
+    void handleInput(bool mouseFree, bool keysFree, float dt);
     /// The scene's action (e.g. "Fire"), if it has one.
     void runAction();
     /// Runs as many fixed steps as fit in frameTime (scaled by timeScale).

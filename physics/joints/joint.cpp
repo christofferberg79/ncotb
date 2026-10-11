@@ -290,4 +290,59 @@ void SliderJoint::solve(bool useBias) {
     }
 }
 
+// ------------------------------------------------------------------ mouse joint
+
+MouseJoint::MouseJoint(RigidBody& ground, RigidBody& b, const Vec3& grabPoint, Real frequency,
+                       Real dampingRatio, Real maxForce)
+    : Joint(ground, b),
+      localB_(transpose(b.R()) * (grabPoint - b.x)),
+      target_(grabPoint),
+      frequency_(frequency),
+      dampingRatio_(dampingRatio),
+      maxForce_(maxForce) {}
+
+Vec3 MouseJoint::anchorB() const { return b_->x + b_->R() * localB_; }
+
+void MouseJoint::prepare(Real h, const JointSettings& settings) {
+    settings_ = settings;
+    h_ = h;
+    const RigidBody& b = *b_;
+    rB_ = b.R() * localB_;
+
+    // Soft constraint (Catto, "Soft Constraints", GDC 2011): a spring k and damper
+    // c become a constraint with compliance gamma and position feedback beta.
+    const Real m = b.mass() > 0 ? b.mass() : 1;
+    const Real omega = 2 * M_PI * frequency_;
+    const Real k = m * omega * omega, c = 2 * m * dampingRatio_ * omega;
+    const Real hk = h * k, denom = c + hk;
+    gamma_ = denom > 0 ? 1 / (h * denom) : 0;
+    const Real beta = denom > 0 ? hk / denom : 0;
+
+    // K = 1/m I - [r]x I^-1 [r]x, softened by gamma.
+    Mat3 s = Mat3::star(rB_);
+    Mat3 K = Mat3::identity() * (b.invMass() + gamma_) - s * b.Iinv() * s;
+    invK_ = inverse(K);
+    bias_ = ((b.x + rB_) - target_) * (beta / h);
+
+    // Angular damping of the held body: omega *= 1 / (1 + h c), as an impulse.
+    if (angularDamping_ > 0 && !b_->isStatic()) {
+        Vec3 L = b.I() * b.omega();
+        b_->applyAngularImpulse(L * -(1 - 1 / (1 + h * angularDamping_)));
+    }
+}
+
+void MouseJoint::warmStart() { b_->applyImpulseAtOffset(impulse_, rB_); }
+
+void MouseJoint::solve(bool /*useBias*/) {
+    // A spring stays a spring in the relax phase too: its pull is a real force,
+    // not a position correction, so the bias is always used.
+    Vec3 cdot = b_->v() + cross(b_->omega(), rB_);
+    Vec3 lambda = invK_ * -(cdot + bias_ + impulse_ * gamma_);
+    Vec3 old = impulse_;
+    impulse_ += lambda;
+    Real maxImpulse = maxForce_ * h_;
+    if (Real len = length(impulse_); len > maxImpulse) impulse_ *= maxImpulse / len;
+    b_->applyImpulseAtOffset(impulse_ - old, rB_);
+}
+
 } // namespace ncotb

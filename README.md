@@ -34,6 +34,10 @@ Controls:
 | scroll (two fingers) | zoom |
 | arrow keys (Shift: faster), Q / E | move the view's centre over the ground, down / up |
 | C | reset the view (R restarts the scene and keeps the view) |
+| **click-drag on a body** | **grab it** (a soft spring to the cursor; scroll: nearer / farther) |
+| **Option + click on a body** | **push it** along the view |
+| **1 / 2 / 3** | **drop a box / drop a ball / throw a ball** at the cursor |
+| **Backspace** | **delete the body under the cursor** |
 | Space / S / R / F | pause / single step / reset scene / scene action |
 
 ### VS Code
@@ -50,9 +54,9 @@ physics/   simulation library (no graphics dependency)
   math/    Vec3, Mat3, Quat
   body/    Shape, RigidBody
   integration/  Euler, Midpoint, Heun, RK4 for any OdeSystem
-  collision/    sphere/box/plane contact manifolds
+  collision/    sphere/box/plane contact manifolds, ray casts
   solver/       contact solvers with friction: sequential impulses, Baraff LCP
-  joints/       ball, hinge (limits, motor), slider (limits, motor)
+  joints/       ball, hinge (limits, motor), slider (limits, motor), mouse (soft)
   forces/       springs with dampers
   world.*  World: owns bodies, fixed-step integration
 app/       raylib + ImGui front-end, scenes
@@ -69,6 +73,6 @@ docs/      notes
 - [x] 3. Contacts: collisions + resting contact (Sequential Impulses / PGS, plus Baraff's LCP for comparison)
 - [x] 4. Friction
 - [x] 5. Springs, dampers, joints (ball, hinge, slider)
-- [ ] 6. Interaction: mouse picking/dragging, impulses, spawning
+- [x] 6. Interaction: mouse picking/dragging, impulses, spawning
 - [ ] 7. Heightfield terrain
 - [ ] 8. Drivable vehicle

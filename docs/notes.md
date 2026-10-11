@@ -281,3 +281,43 @@ momentum about the hinge is conserved.
   own line and has no sideways stiffness, so a tilted box makes the springs buckle. Real
   suspensions guide their springs. The demo crate hangs from its springs instead and settles
   exactly at the predicted height.
+
+## Interaction (milestone 6)
+
+**Ray casting** (`physics/collision/raycast.*`): sphere (a quadratic equation), box (the slab
+test in box coordinates: intersect the three pairs of parallel face planes) and plane (a
+half-space). A ray that starts inside a body hits it at distance 0. `World::raycast` returns
+the nearest hit, skipping static bodies unless asked, with a bounding-sphere rejection first.
+
+**Grabbing** uses a mouse joint (`MouseJoint`, Catto): a *soft* point constraint between a
+point on the body and the cursor's target. A spring k and damper c,
+
+    k = m (2π f)²,   c = 2 m ζ (2π f)    (f = 5 Hz, ζ = 0.7, m = the body's mass)
+
+become a constraint with compliance γ = 1/(h(c + hk)) and position feedback β = hk/(c + hk),
+solved like the other joints:
+
+    λ = −(K + γI)⁻¹ (v_point + β/h · C + γ·λ_accumulated)
+
+Two safety measures:
+- **The force is capped** at 30 × the body's weight, so a drag can't fling a body or tear it
+  out of its joints. Tested: with the cap at half the weight, a held box sinks at g/2.
+- **The held body gets angular damping** (10/s). This is an interaction choice, not physics:
+  the spring only damps the grabbed *point*, so a body would keep swinging around it like a
+  pendulum without air. With 3/s a box jerked 2.6 m still swung after 5 s, because damping
+  the spin about the centre only works through I_cm / I_pivot ≈ 40% of it. 10/s settles it in
+  about 3 s.
+
+The target moves on the plane through the grabbed point that faces the camera; scrolling
+moves that plane nearer or farther.
+
+**Pushing** applies J = m · Δv along the view ray at the hit point. Hitting a ball off-centre
+along a downward ray puts part of it into spin and into the ground: a 3 m/s push gave a ball
+2.0 m/s.
+
+**Removing a body** (`World::removeBody`) also removes every joint, spring, contact and
+warm-start entry that refers to it. Otherwise they'd hold dangling pointers (checked under ASan).
+
+The app reads raylib's input into an `Input` struct once per frame, so the interaction code can
+also be driven by a script. A scripted run under ASan exercises grabbing, pushing, spawning,
+deleting and "remove spawned".

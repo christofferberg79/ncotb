@@ -31,14 +31,7 @@ int main() {
     while (!WindowShouldClose()) {
         bool mouseFree = !ImGui::GetIO().WantCaptureMouse;
         bool keysFree = !ImGui::GetIO().WantCaptureKeyboard;
-        app.orbit.update(mouseFree, keysFree, GetFrameTime());
-        if (keysFree) {
-            if (IsKeyPressed(KEY_SPACE)) app.paused = !app.paused;
-            if (IsKeyPressed(KEY_S)) app.stepOnce = true;
-            if (IsKeyPressed(KEY_R)) app.resetScene();
-            if (IsKeyPressed(KEY_F)) app.runAction();
-            if (IsKeyPressed(KEY_C)) app.resetView();
-        }
+        app.handleInput(mouseFree, keysFree, GetFrameTime());
 
         app.advance(GetFrameTime());
 

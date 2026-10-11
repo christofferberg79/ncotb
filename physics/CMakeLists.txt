@@ -1,6 +1,7 @@
 add_library(physics STATIC
   body/rigid_body.cpp
   collision/collide.cpp
+  collision/raycast.cpp
   integration/integrator.cpp
   joints/joint.cpp
   solver/constraint_solver.cpp

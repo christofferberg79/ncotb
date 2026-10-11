@@ -86,6 +86,42 @@ void buildBrickWall(World& w) {
 
 const std::vector<Scene>& scenes() {
     static const std::vector<Scene> list = {
+        {.name = "Playground (drag, Option+click, 1/2/3, Backspace)",
+         .contacts = true,
+         .build =
+             [](World& w) {
+                 w.gravity = {0, -9.81, 0};
+                 w.addBody(Shape::plane(), 0).friction = 0.6;
+                 // A tower of boxes.
+                 for (int i = 0; i < 5; ++i)
+                     w.addBody(Shape::box({0.3, 0.3, 0.3}), 2, {-2.5, 0.3 + 0.6 * i, -0.5});
+                 // Loose balls and boxes.
+                 for (int i = 0; i < 4; ++i)
+                     w.addBody(Shape::sphere(0.25 + 0.05 * i), 1 + i, {-0.5 + 0.8 * i, 0.25 + 0.05 * i, 1.5});
+                 w.addBody(Shape::box({0.5, 0.2, 0.3}), 3, {2.6, 0.2, 2.4},
+                           Quat::fromAxisAngle({0, 1, 0}, 0.5));
+                 // A seesaw: a plank on a hinge over a static block.
+                 w.addBody(Shape::box({0.15, 0.3, 0.6}), 0, {0.5, 0.3, -1.5});
+                 RigidBody& plank = w.addBody(Shape::box({1.6, 0.05, 0.4}), 4, {0.5, 0.65, -1.5},
+                                              Quat::fromAxisAngle({0, 0, 1}, 0.2));
+                 plank.userData = packColor(150, 110, 70);
+                 w.addHinge(w.ground(), plank, {0.5, 0.65, -1.5}, {0, 0, 1});
+                 // A ramp.
+                 w.addBody(Shape::box({1.5, 0.1, 1}), 0, {3.5, 0.6, 0.8},
+                           Quat::fromAxisAngle({0, 0, 1}, 0.4));
+                 // A ball hanging on a chain of three links.
+                 RigidBody* prev = &w.ground();
+                 const Vec3 top{3.5, 3.6, -2};
+                 for (int i = 0; i < 3; ++i) {
+                     RigidBody& link =
+                         w.addBody(Shape::box({0.04, 0.2, 0.04}), 0.3, top - Vec3{0, 0.4 * i + 0.2, 0});
+                     w.addBallJoint(*prev, link, top - Vec3{0, 0.4 * i, 0});
+                     prev = &link;
+                 }
+                 RigidBody& ball = w.addBody(Shape::sphere(0.3), 3, top - Vec3{0, 1.5, 0});
+                 w.addBallJoint(*prev, ball, top - Vec3{0, 1.2, 0});
+             },
+         .showVectors = false},
         {"Intermediate axis (Dzhanibekov)", false,
          [](World& w) {
              w.gravity = {};

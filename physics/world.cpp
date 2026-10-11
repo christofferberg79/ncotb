@@ -24,6 +24,43 @@ SliderJoint& World::addSlider(RigidBody& a, RigidBody& b, const Vec3& anchor, co
     return static_cast<SliderJoint&>(*joints_.back());
 }
 
+MouseJoint& World::addMouseJoint(RigidBody& b, const Vec3& grabPoint, Real frequency, Real dampingRatio,
+                                 Real maxForce) {
+    joints_.push_back(std::make_unique<MouseJoint>(ground_, b, grabPoint, frequency, dampingRatio, maxForce));
+    return static_cast<MouseJoint&>(*joints_.back());
+}
+
+void World::removeJoint(const Joint& joint) {
+    std::erase_if(joints_, [&](const auto& j) { return j.get() == &joint; });
+}
+
+void World::removeBody(const RigidBody& body) {
+    std::erase_if(joints_, [&](const auto& j) { return &j->bodyA() == &body || &j->bodyB() == &body; });
+    std::erase_if(springs_, [&](const Spring& s) { return s.a == &body || s.b == &body; });
+    std::erase_if(contacts_, [&](const ContactManifold& m) { return m.a == &body || m.b == &body; });
+    std::erase_if(cache_, [&](const CachedPoint& c) { return c.a == &body || c.b == &body; });
+    std::erase_if(bodies_, [&](const auto& b) { return b.get() == &body; });
+}
+
+std::optional<RayHit> World::raycast(const Vec3& origin, const Vec3& dir, Real maxDistance,
+                                     bool includeStatic) {
+    const Vec3 d = normalize(dir);
+    std::optional<RayHit> best;
+    for (auto& body : bodies_) {
+        if (body->isStatic() && !includeStatic) continue;
+        // Quick rejection: the ray passes farther from the centre than the bounding radius.
+        Real r = body->shape().boundingRadius();
+        if (std::isfinite(r)) {
+            Vec3 m = body->x - origin;
+            Real along = std::max(dot(m, d), Real(0));
+            if (lengthSquared(m - d * along) > r * r) continue;
+        }
+        auto hit = ncotb::raycast(*body, origin, d);
+        if (hit && hit->distance <= maxDistance && (!best || hit->distance < best->distance)) best = hit;
+    }
+    return best;
+}
+
 Spring& World::addSpring(RigidBody& a, const Vec3& pa, RigidBody& b, const Vec3& pb, Real stiffness,
                          Real damping, Real restLength) {
     Spring s{&a,

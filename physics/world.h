@@ -2,6 +2,7 @@
 
 #include "body/rigid_body.h"
 #include "collision/collide.h"
+#include "collision/raycast.h"
 #include "forces/spring.h"
 #include "integration/integrator.h"
 #include "joints/joint.h"
@@ -43,7 +44,19 @@ public:
     BallJoint& addBallJoint(RigidBody& a, RigidBody& b, const Vec3& anchor);
     HingeJoint& addHinge(RigidBody& a, RigidBody& b, const Vec3& anchor, const Vec3& axis);
     SliderJoint& addSlider(RigidBody& a, RigidBody& b, const Vec3& anchor, const Vec3& axis);
+    /// A soft "mouse" joint pulling grabPoint on b towards a target (see MouseJoint).
+    MouseJoint& addMouseJoint(RigidBody& b, const Vec3& grabPoint, Real frequency, Real dampingRatio,
+                              Real maxForce);
+    void removeJoint(const Joint& joint);
     const std::vector<std::unique_ptr<Joint>>& joints() const { return joints_; }
+
+    /// Removes a body, and with it every joint, spring and contact that refers to it.
+    void removeBody(const RigidBody& body);
+
+    /// Nearest body hit by the ray origin + t dir (t in [0, maxDistance]); static
+    /// bodies only if includeStatic. dir needn't be normalized.
+    std::optional<RayHit> raycast(const Vec3& origin, const Vec3& dir, Real maxDistance = INFINITY,
+                                  bool includeStatic = false);
 
     /// Spring with damper between world points pa (on a) and pb (on b), at the
     /// bodies' current poses. restLength < 0: the current distance.

@@ -150,4 +150,51 @@ private:
     Real lowerImpulse_ = 0, upperImpulse_ = 0, motorImpulse_ = 0;
 };
 
+/// Pulls a point on body b towards a moving world target, like a stiff spring
+/// with a damper (Catto's "mouse joint"): a soft point constraint with
+///
+///     stiffness k = m (2 pi f)^2,   damping c = 2 m zeta (2 pi f)
+///
+/// for b's mass m, frequency f and damping ratio zeta, and the force capped at
+/// maxForce, so a drag can't fling a body or tear it out of other joints.
+/// a is the static anchor (World::ground()).
+///
+/// The spring only damps the motion of the grabbed point; the body would keep
+/// swinging around it like an undamped pendulum. For comfortable dragging the
+/// held body also gets angular damping (an interaction choice, not physics:
+/// like extra air resistance while held; 0 turns it off).
+class MouseJoint : public Joint {
+public:
+    /// grabPoint in world space, on b at its current pose; the target starts there.
+    MouseJoint(RigidBody& ground, RigidBody& b, const Vec3& grabPoint, Real frequency, Real dampingRatio,
+               Real maxForce);
+
+    void setTarget(const Vec3& target) { target_ = target; }
+    const Vec3& target() const { return target_; }
+    void setStiffness(Real frequency, Real dampingRatio) {
+        frequency_ = frequency;
+        dampingRatio_ = dampingRatio;
+    }
+    void setMaxForce(Real maxForce) { maxForce_ = maxForce; }
+    void setAngularDamping(Real perSecond) { angularDamping_ = perSecond; }
+    Real maxForce() const { return maxForce_; }
+    /// Force from the last step (N).
+    Real force() const { return h_ > 0 ? length(impulse_) / h_ : 0; }
+
+    void prepare(Real h, const JointSettings& settings) override;
+    void warmStart() override;
+    void solve(bool useBias) override;
+    Vec3 anchorA() const override { return target_; }
+    Vec3 anchorB() const override;
+
+private:
+    Vec3 localB_, target_;
+    Real frequency_, dampingRatio_, maxForce_;
+    Real angularDamping_ = 10; ///< 1/s: settles a box jerked 2.6 m in ~3 s (3/s: still swinging)
+    Vec3 rB_{}, bias_{};
+    Mat3 invK_;
+    Real gamma_ = 0, h_ = 0;
+    Vec3 impulse_{};
+};
+
 } // namespace ncotb

@@ -34,6 +34,7 @@ void App::loadScene(int i) {
         world.integrator = freeIntegrator;
         world.substeps = 1; // keep the integrator comparison at the plain step length
     }
+    interaction.reset();
     scene.build(world);
     sceneGravity = world.gravity;
     world.detectCollisions();
@@ -44,6 +45,19 @@ void App::loadScene(int i) {
     energyErrorHistory.fill(0);
     historyPos = 0;
     energy0 = world.totalEnergy();
+}
+
+void App::handleInput(bool mouseFree, bool keysFree, float dt) {
+    bool mouseTaken = interaction.update(world, orbit.camera(), Input::read(), mouseFree, keysFree);
+    if (interaction.removedBodies()) editIndex = -1; // body indices changed
+    orbit.update(mouseFree && !mouseTaken, keysFree, dt);
+    if (keysFree) {
+        if (IsKeyPressed(KEY_SPACE)) paused = !paused;
+        if (IsKeyPressed(KEY_S)) stepOnce = true;
+        if (IsKeyPressed(KEY_R)) resetScene();
+        if (IsKeyPressed(KEY_F)) runAction();
+        if (IsKeyPressed(KEY_C)) resetView();
+    }
 }
 
 void App::recordHistory() {
@@ -133,6 +147,8 @@ void App::gui() {
 
     if (contactScene) solverGui();
     contactsGui();
+    interaction.gui(world);
+    if (interaction.removedBodies()) editIndex = -1;
     editGui();
 
     if (!ImGui::CollapsingHeader("Energy and momentum", ImGuiTreeNodeFlags_DefaultOpen)) {
@@ -167,6 +183,7 @@ void App::footer() {
     ImGui::Separator();
     ImGui::TextDisabled("Drag: orbit   Shift+drag: pan   Scroll: zoom");
     ImGui::TextDisabled("Arrows, Q/E: move   C: reset view   %d FPS", GetFPS());
+    ImGui::TextDisabled("Drag a body: grab   Opt+click: push   1/2/3: spawn");
     ImGui::End();
 }
 
@@ -335,6 +352,7 @@ void App::drawScene() const {
         rlDrawRenderBatchActive();
         rlEnableDepthTest();
     }
+    interaction.draw(world);
 }
 
 } // namespace ncotb::app
