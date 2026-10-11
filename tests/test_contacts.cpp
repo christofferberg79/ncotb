@@ -11,8 +11,7 @@ using namespace ncotb;
 namespace {
 
 constexpr Real kH = 1.0 / 240;
-constexpr SolverType kSolvers[] = {SolverType::SequentialImpulses,
-                                          SolverType::BaraffLcp};
+constexpr SolverType kSolvers[] = {SolverType::SequentialImpulses, SolverType::BaraffLcp};
 
 World groundWorld(SolverType solver) {
     World w;

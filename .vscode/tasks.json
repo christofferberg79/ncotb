@@ -53,7 +53,7 @@
         {
             "label": "run tests",
             "type": "shell",
-            "command": "./build-debug/tests/physics_tests",
+            "command": "ctest --preset debug",
             "options": { "cwd": "${workspaceFolder}" },
             "dependsOn": "build (debug)",
             "group": { "kind": "test", "isDefault": true },

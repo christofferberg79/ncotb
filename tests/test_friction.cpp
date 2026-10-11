@@ -10,8 +10,7 @@ namespace {
 
 constexpr Real kH = 1.0 / 240;
 constexpr Real kG = 9.81;
-constexpr SolverType kSolvers[] = {SolverType::SequentialImpulses,
-                                          SolverType::BaraffLcp};
+constexpr SolverType kSolvers[] = {SolverType::SequentialImpulses, SolverType::BaraffLcp};
 
 /// A world with a ground plane tilted by theta about z, and both bodies' mu set
 /// so the combined sqrt(mu_a mu_b) is mu.

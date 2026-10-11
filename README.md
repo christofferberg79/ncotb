@@ -9,7 +9,7 @@ raylib + Dear ImGui. See [docs/notes.md](docs/notes.md) for design notes.
 brew install cmake ninja          # once
 cmake --preset release            # first configure downloads raylib, imgui, rlImGui, doctest
 cmake --build --preset release
-./build/tests/physics_tests       # or: ctest --preset release
+ctest --preset release            # unit tests + formatting check
 ./build/app/ncotb
 ```
 
@@ -21,7 +21,11 @@ Presets (`CMakePresets.json`):
 | `release` | `build/`       | running at full speed (RelWithDebInfo) |
 | `asan`    | `build-asan/`  | Debug + AddressSanitizer/UBSan for our code |
 
-Controls: drag to orbit, wheel to zoom, Space pause, S single step, R reset.
+Our code (physics, app, tests) builds with `-Wall -Wextra -Wpedantic -Wshadow -Werror`, so a
+warning fails the build (`-DNCOTB_WERROR=OFF` to relax that locally). `ctest` also runs a `format`
+test that fails if a file differs from `.clang-format` (fix with the "format all" task).
+
+Controls: drag to orbit, wheel to zoom, Space pause, S single step, R reset, F scene action.
 
 ### VS Code
 

@@ -1,6 +1,6 @@
 add_executable(ncotb main.cpp app.cpp draw.cpp scenes.cpp)
 target_link_libraries(ncotb PRIVATE physics imgui raylib)
-target_compile_options(ncotb PRIVATE -Wall -Wextra)
+ncotb_warnings(ncotb)
 if(APPLE)
   target_link_libraries(ncotb PRIVATE "-framework IOKit" "-framework Cocoa" "-framework OpenGL")
 endif()
