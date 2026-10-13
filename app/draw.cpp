@@ -2,7 +2,10 @@
 
 #include <rlgl.h>
 
+#include <algorithm>
 #include <cmath>
+#include <memory>
+#include <utility>
 
 namespace ncotb::app {
 
@@ -19,7 +22,104 @@ void pushTransform(const RigidBody& b) {
     rlPushMatrix();
     rlMultMatrixf(m);
 }
+
+// ---------------------------------------------------------------- terrain
+
+/// Uploaded terrain meshes, one per heightfield. Holding the heightfield keeps
+/// its address from being reused by a new one while the mesh is cached.
+struct TerrainMesh {
+    std::shared_ptr<const Heightfield> terrain;
+    Model model;
+};
+std::vector<TerrainMesh> terrainMeshes;
+
+/// Terrain colour: grass in the valleys, earth, rock on the heights and on steep
+/// slopes, snow on the tops.
+Vec3 terrainColor(Real t, Real steep) {
+    const Vec3 grass{88, 138, 68}, earth{140, 122, 84}, rock{132, 128, 122}, snow{236, 238, 242};
+    auto mix = [](const Vec3& a, const Vec3& b, Real f) {
+        return a + (b - a) * std::clamp(f, Real(0), Real(1));
+    };
+    Vec3 c = t < 0.5 ? mix(grass, earth, (t - 0.25) / 0.25) : mix(earth, rock, (t - 0.55) / 0.2);
+    c = mix(c, rock, (steep - 0.25) / 0.25);
+    return mix(c, snow, (t - 0.85) / 0.06);
+}
+
+/// A mesh with a colour per vertex, shaded on the CPU by a fixed sun (the
+/// renderer has no lights). The triangles are the heightfield's own.
+Model buildTerrainModel(const Heightfield& hf) {
+    const int nx = hf.nx(), nz = hf.nz();
+    // Smooth normals at the vertices, from central differences.
+    auto vertexNormal = [&](int i, int k) {
+        int i0 = std::max(i - 1, 0), i1 = std::min(i + 1, nx - 1);
+        int k0 = std::max(k - 1, 0), k1 = std::min(k + 1, nz - 1);
+        Real dx = (hf.heightAt(i1, k) - hf.heightAt(i0, k)) / ((i1 - i0) * hf.cellSize());
+        Real dz = (hf.heightAt(i, k1) - hf.heightAt(i, k0)) / ((k1 - k0) * hf.cellSize());
+        return normalize(Vec3{-dx, 1, -dz});
+    };
+    const Vec3 sun = normalize(Vec3{0.45, 1, 0.3});
+    const Real range = std::max(hf.maxHeight() - hf.minHeight(), Real(1e-6));
+
+    const int cells = (nx - 1) * (nz - 1);
+    Mesh mesh{};
+    mesh.vertexCount = cells * 6;
+    mesh.triangleCount = cells * 2;
+    mesh.vertices = static_cast<float*>(MemAlloc(unsigned(mesh.vertexCount * 3 * int(sizeof(float)))));
+    mesh.normals = static_cast<float*>(MemAlloc(unsigned(mesh.vertexCount * 3 * int(sizeof(float)))));
+    mesh.colors = static_cast<unsigned char*>(MemAlloc(unsigned(mesh.vertexCount) * 4));
+    int v = 0;
+    auto add = [&](int i, int k) {
+        Vec3 p = hf.vertex(i, k), n = vertexNormal(i, k);
+        Real shade = 0.5 + 0.5 * std::max(dot(n, sun), Real(0));
+        Vec3 c = terrainColor((p.y - hf.minHeight()) / range, 1 - n.y) * shade;
+        for (int a = 0; a < 3; ++a) {
+            mesh.vertices[3 * v + a] = float(p[a]);
+            mesh.normals[3 * v + a] = float(n[a]);
+            mesh.colors[4 * v + a] = (unsigned char)std::clamp(c[a], Real(0), Real(255));
+        }
+        mesh.colors[4 * v + 3] = 255;
+        ++v;
+    };
+    for (int k = 0; k + 1 < nz; ++k) {
+        for (int i = 0; i + 1 < nx; ++i) {
+            // The same two triangles as Heightfield::triangle(), counter-clockwise from above.
+            for (auto [di, dk] : {std::pair{0, 0}, {0, 1}, {1, 1}, {0, 0}, {1, 1}, {1, 0}})
+                add(i + di, k + dk);
+        }
+    }
+    UploadMesh(&mesh, false);
+    return LoadModelFromMesh(mesh);
+}
+
+void drawTerrain(const RigidBody& b) {
+    const auto& terrain = b.shape().terrain;
+    auto it = std::find_if(terrainMeshes.begin(), terrainMeshes.end(),
+                           [&](const TerrainMesh& t) { return t.terrain == terrain; });
+    if (it == terrainMeshes.end()) {
+        terrainMeshes.push_back({terrain, buildTerrainModel(*terrain)});
+        it = terrainMeshes.end() - 1;
+    }
+    DrawModel(it->model, {0, 0, 0}, 1, WHITE);
+    // Faint grid lines every 5 cells, just above the surface.
+    const Heightfield& hf = *terrain;
+    const Color line{0, 0, 0, 28};
+    auto lifted = [&](int i, int k) { return toRl(hf.vertex(i, k) + Vec3{0, 0.02, 0}); };
+    for (int k = 0; k < hf.nz(); k += 5)
+        for (int i = 0; i + 1 < hf.nx(); ++i)
+            DrawLine3D(lifted(i, k), lifted(i + 1, k), line);
+    for (int i = 0; i < hf.nx(); i += 5)
+        for (int k = 0; k + 1 < hf.nz(); ++k)
+            DrawLine3D(lifted(i, k), lifted(i, k + 1), line);
+}
 } // namespace
+
+void releaseUnusedTerrainMeshes() {
+    std::erase_if(terrainMeshes, [](TerrainMesh& t) {
+        if (t.terrain.use_count() > 1) return false; // a body still has it
+        UnloadModel(t.model);
+        return true;
+    });
+}
 
 void drawOutline(const RigidBody& b, Color color) {
     pushTransform(b);
@@ -58,6 +158,7 @@ void drawBody(const RigidBody& b, Color color) {
         }
         break;
     }
+    case Shape::Type::Heightfield: drawTerrain(b); break;
     }
     rlPopMatrix();
 }

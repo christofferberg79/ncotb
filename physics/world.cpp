@@ -124,39 +124,43 @@ void keepReachable(ContactManifold& m, Real margin, Real h) {
     m.count = kept;
 }
 
-/// Speculative contact for a pair that is farther apart than margin now but may
-/// meet within h; speed bounds how fast their gap can shrink. m holds their
-/// contact at the current positions and is replaced.
+/// Speculative contacts for a pair that is farther apart than margin now but may
+/// meet within h; speed bounds how fast their gap can shrink. ms holds their
+/// contacts at the current positions and is replaced.
 ///
 /// The normal of a distant contact can be misleading: far from a box, the
 /// nearest feature of a ball passing beside it is an edge, and a contact on that
 /// edge would stop the ball although it never gets there. So find the time of
 /// impact first, by conservative advancement (move both along their velocities
 /// by as much as the gap allows, until it is closed or the step is over), and
-/// take the contact there, moved back to the current positions.
-bool speculate(RigidBody& a, RigidBody& b, ContactManifold& m, Real margin, Real h, Real speed) {
+/// take the contacts there, moved back to the current positions.
+void speculate(RigidBody& a, RigidBody& b, std::vector<ContactManifold>& ms, Real margin, Real h,
+               Real speed) {
+    ms.clear();
     RigidBody a2 = a, b2 = b;
     Real t = 0;
     for (int i = 0;; ++i) {
-        Real d = distance(a2, b2);
+        Real reach = margin + (h - t) * speed; // farther than this can't be reached
+        Real d = distance(a2, b2, reach);
         if (d <= margin || i == 20) break; // met (or very nearly; take it as met)
         t += d / speed;
-        if (t >= h) return false;
+        if (t >= h) return;
         predict(a2, a, t);
         predict(b2, b, t);
     }
-    if (!collide(a2, b2, m, margin + (h - t) * speed)) return false;
-    // Back to now: the gap is wider by what closes until t.
-    for (int i = 0; i < m.count; ++i) {
-        ContactPoint& p = m.points[i];
-        p.position = a.x + a.R() * (transpose(a2.R()) * (p.position - a2.x));
-        Real closing = -dot(m.normal, a.pointVelocity(p.position) - b.pointVelocity(p.position));
-        p.depth -= t * closing;
+    collide(a2, b2, ms, margin + (h - t) * speed);
+    for (ContactManifold& m : ms) {
+        // Back to now: the gap is wider by what closes until t.
+        for (int i = 0; i < m.count; ++i) {
+            ContactPoint& p = m.points[i];
+            p.position = a.x + a.R() * (transpose(a2.R()) * (p.position - a2.x));
+            Real closing = -dot(m.normal, a.pointVelocity(p.position) - b.pointVelocity(p.position));
+            p.depth -= t * closing;
+        }
+        m.a = &a;
+        m.b = &b;
+        keepReachable(m, margin, h);
     }
-    m.a = &a;
-    m.b = &b;
-    keepReachable(m, margin, h);
-    return m.count > 0;
 }
 
 } // namespace
@@ -171,7 +175,7 @@ void World::detectCollisions(Real h) {
     speed_.resize(bodies_.size());
     for (size_t i = 0; i < bodies_.size(); ++i)
         speed_[i] = h > 0 ? speedBound(*bodies_[i]) : 0;
-    ContactManifold m;
+    std::vector<ContactManifold>& ms = pairContacts_;
     for (size_t i = 0; i < bodies_.size(); ++i) {
         for (size_t j = i + 1; j < bodies_.size(); ++j) {
             RigidBody& a = *bodies_[i];
@@ -186,19 +190,24 @@ void World::detectCollisions(Real h) {
             // Keep the dynamic body as a, so normals point away from static geometry.
             RigidBody& dyn = a.isStatic() ? b : a;
             RigidBody& other = a.isStatic() ? a : b;
-            if (!collide(dyn, other, m, margin)) continue;
+            ms.clear();
+            collide(dyn, other, ms, margin);
+            if (ms.empty()) continue;
             if (margin > contactMargin) {
                 // Fast enough to reach farther than contactMargin within the step.
                 Real gap = INFINITY;
-                for (int k = 0; k < m.count; ++k)
-                    gap = std::min(gap, -m.points[k].depth);
-                if (gap <= contactMargin)
-                    keepReachable(m, contactMargin, h); // already touching: keep what it closes on
-                else if (!speculate(dyn, other, m, contactMargin, h, speed_[i] + speed_[j]))
-                    continue;
-                if (m.count == 0) continue;
+                for (const ContactManifold& m : ms)
+                    for (int k = 0; k < m.count; ++k)
+                        gap = std::min(gap, -m.points[k].depth);
+                if (gap <= contactMargin) {
+                    for (ContactManifold& m : ms)
+                        keepReachable(m, contactMargin, h); // already touching: keep what it closes on
+                } else {
+                    speculate(dyn, other, ms, contactMargin, h, speed_[i] + speed_[j]);
+                }
             }
-            contacts_.push_back(m);
+            for (const ContactManifold& m : ms)
+                if (m.count > 0) contacts_.push_back(m);
         }
     }
 }

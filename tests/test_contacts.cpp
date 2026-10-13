@@ -381,3 +381,27 @@ TEST_CASE("a fast ball knocks a free thin plate along instead of passing through
     CHECK(ball.v().z == doctest::Approx(-15).epsilon(0.02));
     CHECK(ball.x.z > plate.x.z);
 }
+
+TEST_CASE("a fast rolling ball stays on the ground (no phantom gap from its rotation)") {
+    // Rolling at 20 m/s with r = 0.4 turns the ball 12 degrees per step. If the
+    // contact point turned with it, it would seem to lift off by r (1 - cos),
+    // and the ball would sink into that gap at ~2 m/s and then bounce.
+    for (SolverType solver : kSolvers) {
+        CAPTURE(solver);
+        World w = groundWorld(solver);
+        const Real r = 0.4, speed = 20;
+        RigidBody& ball = w.addBody(Shape::sphere(r), 1, {0, r, 0});
+        ball.restitution = 0.8;
+        ball.setLinearVelocity({speed, 0, 0});
+        ball.setAngularVelocity({0, 0, -speed / r});
+        Real highest = 0, fastestY = 0;
+        for (int i = 0; i < 240; ++i) {
+            w.step(kH);
+            highest = std::max(highest, ball.x.y - r);
+            fastestY = std::max(fastestY, std::abs(ball.v().y));
+        }
+        CHECK(highest < 1e-6);
+        CHECK(fastestY < 1e-6);
+        CHECK(ball.v().x == doctest::Approx(speed));
+    }
+}

@@ -12,6 +12,8 @@ namespace ncotb::app {
 inline ::Vector3 toRl(const Vec3& v) { return {float(v.x), float(v.y), float(v.z)}; }
 
 void drawBody(const RigidBody& b, Color color);
+/// Frees the meshes of terrain no body uses any more (call once per frame).
+void releaseUnusedTerrainMeshes();
 /// A slightly enlarged wireframe around the body (highlight).
 void drawOutline(const RigidBody& b, Color color);
 void drawArrow(const Vec3& from, const Vec3& dir, Color color);

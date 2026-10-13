@@ -367,3 +367,63 @@ warm-start entry that refers to it. Otherwise they'd hold dangling pointers (che
 The app reads raylib's input into an `Input` struct once per frame, so the interaction code can
 also be driven by a script. A scripted run under ASan exercises grabbing, pushing, spawning,
 deleting and "remove spawned".
+
+## Terrain (milestone 7)
+
+`Heightfield` is a grid of heights in the body's xz-plane, centred on the body. Each cell is
+split into two triangles along the same diagonal, and everything (collision, ray casts and
+the drawn mesh) uses those exact triangles. `Heightfield::hills()` makes smooth random hills
+from value noise: random values on a coarse lattice, blended with smoothstep, over four
+octaves. A seed gives the same hills every time. Terrain bodies are static, like planes.
+
+**More than one normal per pair.** A box lying across a ridge touches triangles that face
+different ways, but a `ContactManifold` has a single normal. `collide()` now has a version
+that appends a list of manifolds. Terrain pairs group their points by normal (within about
+2°) into manifolds of at most four points; every other pair still gives at most one. The
+speculative sweep from the tunnelling fix works on these lists too. Warm starting is keyed by
+the contact point on body a, so it doesn't care how the points are grouped.
+
+**Sphere–terrain.** The closest point on each triangle near the sphere. If the sphere's
+centre is under the surface (it fell in, or took a huge step), it is pushed straight out
+through the triangle it is under.
+
+- *Internal edges:* a ball rolling across flat terrain also finds the shared edge of the
+  next triangle as a closest point, with a normal tilted back towards it. As a speculative
+  contact that edge catches the ball, the classic "internal edge" bump. So an edge or
+  corner point only counts if no triangle sharing it is closer: on flat ground the face
+  under the ball always is. On a real ridge both triangles have the same closest point on
+  the shared edge, and it is kept once. A test checks that a ball rolling over many edges
+  and diagonals keeps its speed to 0.1% and its height to 1 mm.
+
+**Box–terrain.**
+
+- *Corners:* each corner's gap to the plane of the triangle under it.
+- *Terrain vertices poking up into the box's bottom face:* so that a board resting on four
+  spikes stays up on them instead of sinking until its corners touch the ground. Only the
+  face that looks down the most is tested. At first all faces were, and a terrain vertex
+  level with the bottom of a sliding box, just ahead of it, pushed back on its front face
+  and tripped it up.
+- *Not handled:* box edges against terrain edges (a box edge resting across a sharp
+  ridge), and corners beside a steep wall that rises next to them. Neither matters on
+  smooth hills. Over sharp ridges the speculative distance for boxes can be slightly too
+  large, so a fast box can overlap a ridge a little and is then pushed out gently.
+
+**Ray casts** walk the cells under the ray in order (a 2D DDA) and test their two triangles,
+from above only. Grab, drop and hover therefore work on the terrain.
+
+**Found on the way: rolling spheres sank into a phantom gap.** The relax pass recomputes each
+contact's depth after the position update by moving the contact point with each body,
+turned with its rotation. A sphere's surface doesn't move when it turns about its centre.
+But a rotated contact point on a rolling ball rises off the ground by r (1 − cos ωh), so the
+relax pass let the ball fall into that gap at about v²h / 2r. At 6 m/s and 1 substep that is
+0.3 m/s. At 20 m/s it would trip the 0.5 m/s bounce threshold, and the ball (or a car wheel)
+hopped 13 cm. Now only the centre's motion counts for spheres. A regression test rolls a
+ball at 20 m/s on the plane.
+
+**Drawing.** The mesh is uploaded once per heightfield and cached. The renderer has no
+lights, so colours are shaded on the CPU from smooth vertex normals and a fixed sun: grass
+low down, earth, rock on the heights and steep slopes, snow on the tops. Faint lines every
+5 m help to read the slopes. A cached mesh is freed once no body uses its heightfield.
+
+**Cost.** 50 bodies on 80 × 80 m of hills: 0.48 ms per step with 4 substeps, against 0.39 ms on
+the plane (release build).

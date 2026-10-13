@@ -2,6 +2,8 @@
 
 #include "math/vec3.h"
 
+#include <vector>
+
 namespace ncotb {
 
 class RigidBody;
@@ -33,13 +35,22 @@ struct ContactManifold {
 
 /// Tests a and b for contact. Returns true and fills m if the shapes overlap or
 /// are closer than margin. Supports every pair of sphere, box and plane except
-/// plane-plane.
+/// plane-plane (not heightfields: use the list version).
 bool collide(RigidBody& a, RigidBody& b, ContactManifold& m, Real margin = 0);
 
+/// All contacts between a and b, appended to out (each with a == &a). A sphere or
+/// box on a heightfield can touch triangles facing different ways, so it gives a
+/// manifold per normal; other pairs give at most one. Heightfields collide with
+/// spheres and boxes only.
+void collide(RigidBody& a, RigidBody& b, std::vector<ContactManifold>& out, Real margin = 0);
+
 /// Distance between the shapes of a and b (negative when they overlap), or a
-/// lower bound on it: it is exact except for box-box, where it is the largest
-/// separation along the 15 separating axes. Never more than the true distance,
-/// so a body can safely move this far towards the other (conservative advancement).
-Real distance(RigidBody& a, RigidBody& b);
+/// lower bound on it, capped at maxDistance. It is exact for pairs of spheres,
+/// planes and boxes except box-box, where it is the largest separation along the
+/// 15 separating axes: never more than the true distance, so a body can safely
+/// move this far towards the other (conservative advancement). For boxes on a
+/// heightfield it is the gap of the nearest corner (or terrain vertex), which can
+/// be a little more over sharp ridges.
+Real distance(RigidBody& a, RigidBody& b, Real maxDistance = INFINITY);
 
 } // namespace ncotb

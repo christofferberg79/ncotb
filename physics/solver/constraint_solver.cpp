@@ -125,13 +125,28 @@ void ConstraintSolver::solveVelocities() {
     storeFriction();
 }
 
+namespace {
+
+/// How far the surface at offset r0 from the centre of b moved since the start
+/// of the step (centre x0, orientation q0): turned along with the body, except
+/// for a sphere, whose surface stays where it is when it turns about its centre.
+/// (Turning the offset of a rolling ball would lift its contact point off the
+/// ground, and the relax pass would let the ball fall into that phantom gap at
+/// v^2 h / 2r: enough to trip the bounce threshold at speed.)
+Vec3 surfaceMotion(const RigidBody& b, const Vec3& x0, const Quat& q0, const Vec3& r0) {
+    Vec3 arm = b.shape().type == Shape::Type::Sphere ? r0 : rotate(b.q * conjugate(q0), r0);
+    return (b.x + arm) - (x0 + r0);
+}
+
+} // namespace
+
 Real ConstraintSolver::updateAnchors(Row& r) const {
-    // How far the two contact points moved, with the offsets turned along with
-    // the bodies. The lever arms ra, rb themselves stay as they were: a sphere's
-    // contact point stays at the bottom while the sphere turns, and a rotated
-    // lever arm would make the normal impulse brake the rolling.
-    Vec3 movedA = (r.a->x + rotate(r.a->q * conjugate(r.qa0), r.ra0)) - (r.xa0 + r.ra0);
-    Vec3 movedB = (r.b->x + rotate(r.b->q * conjugate(r.qb0), r.rb0)) - (r.xb0 + r.rb0);
+    // How far the two contact points moved. The lever arms ra, rb themselves
+    // stay as they were: a sphere's contact point stays at the bottom while the
+    // sphere turns, and a rotated lever arm would make the normal impulse brake
+    // the rolling.
+    Vec3 movedA = surfaceMotion(*r.a, r.xa0, r.qa0, r.ra0);
+    Vec3 movedB = surfaceMotion(*r.b, r.xb0, r.qb0, r.rb0);
     r.invK = effectiveMassInverse(*r.a, *r.b, r.ra, r.rb, r.n); // I^-1 has turned
     r.invKt1 = effectiveMassInverse(*r.a, *r.b, r.ra, r.rb, r.t1);
     r.invKt2 = effectiveMassInverse(*r.a, *r.b, r.ra, r.rb, r.t2);

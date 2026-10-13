@@ -274,6 +274,7 @@ const char* App::shapeName(const RigidBody& b) {
     case Shape::Type::Sphere: return "sphere";
     case Shape::Type::Box: return "box";
     case Shape::Type::Plane: return "plane";
+    case Shape::Type::Heightfield: return "terrain";
     }
     return "?";
 }
@@ -285,7 +286,9 @@ void App::editGui() {
         editIndex >= 0 ? std::to_string(editIndex) + " " + shapeName(*bodies[editIndex]) : "none";
     if (ImGui::BeginCombo("Body", current.c_str())) {
         for (int i = 0; i < int(bodies.size()); ++i) {
-            if (bodies[i]->shape().type == Shape::Type::Plane) continue;
+            if (bodies[i]->shape().type == Shape::Type::Plane ||
+                bodies[i]->shape().type == Shape::Type::Heightfield)
+                continue;
             std::string label = std::to_string(i) + " " + shapeName(*bodies[i]);
             if (ImGui::Selectable(label.c_str(), i == editIndex)) {
                 editIndex = i;
@@ -318,7 +321,11 @@ void App::drawScene() const {
     const Color palette[] = {{230, 120, 70, 255}, {80, 150, 220, 255},  {120, 190, 100, 255},
                              {220, 190, 70, 255}, {170, 110, 200, 255}, {90, 200, 190, 255}};
 
-    DrawGrid(40, 1.0f);
+    releaseUnusedTerrainMeshes();
+    const bool terrain = std::any_of(world.bodies().begin(), world.bodies().end(), [](const auto& b) {
+        return b->shape().type == Shape::Type::Heightfield;
+    });
+    if (!terrain) DrawGrid(40, 1.0f); // it would cut through the hills
     int i = 0;
     for (auto& b : world.bodies()) {
         if (b->shape().type == Shape::Type::Plane) continue; // drawn below

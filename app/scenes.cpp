@@ -3,6 +3,7 @@
 #include "draw.h"
 
 #include <cmath>
+#include <memory>
 #include <random>
 
 namespace ncotb::app {
@@ -82,6 +83,52 @@ void buildBrickWall(World& w) {
     }
 }
 
+// ---------------------------------------------------------------- terrain scene
+
+/// 80 x 80 m of hills: balls along a hillside, boxes tumbling down a slope and a
+/// stack of crates on the flattest spot near the middle.
+void buildTerrain(World& w) {
+    w.gravity = {0, -9.81, 0};
+    auto hf = std::make_shared<const Heightfield>(Heightfield::hills(80, 1.0, 7.0, 22.0, 7));
+    RigidBody& ground = w.addBody(Shape::heightfield(hf), 0);
+    ground.friction = 0.7;
+    ground.restitution = 0.1;
+
+    // Highest terrain point under a disc of radius r around (x, z).
+    auto highest = [&](Real x, Real z, Real r) {
+        Real top = -INFINITY;
+        for (Real dx : {-r, 0.0, r})
+            for (Real dz : {-r, 0.0, r})
+                top = std::max(top, hf->height(x + dx, z + dz));
+        return top;
+    };
+    for (int i = 0; i < 8; ++i) {
+        const Real r = 0.3 + 0.08 * (i % 3), x = -14 + 3.5 * i, z = -10;
+        RigidBody& ball = w.addBody(Shape::sphere(r), 2 + i % 3, {x, highest(x, z, r) + r + 0.3, z});
+        ball.restitution = 0.3;
+    }
+    for (int i = 0; i < 6; ++i) {
+        const Real x = -10 + 4 * i, z = 9;
+        w.addBody(Shape::box({0.35, 0.25, 0.3}), 2, {x, highest(x, z, 0.5) + 1.2, z},
+                  Quat::fromAxisAngle({1, 2, 3}, 0.9 * i));
+    }
+    // The flattest vertex within 10 m of the middle.
+    Real bestX = 0, bestZ = 0, flattest = -1;
+    for (Real x = -10; x <= 10; x += 1)
+        for (Real z = -10; z <= 10; z += 1)
+            if (Real up = hf->normal(x + 0.3, z + 0.6).y; up > flattest) {
+                flattest = up;
+                bestX = x;
+                bestZ = z;
+            }
+    Real y = highest(bestX, bestZ, 0.6) + 0.01;
+    for (int i = 0; i < 3; ++i) {
+        RigidBody& crate = w.addBody(Shape::box({0.4, 0.4, 0.4}), 3, {bestX, y + 0.4, bestZ});
+        crate.userData = packColor(170, 120, 70);
+        y += 0.81;
+    }
+}
+
 } // namespace
 
 const std::vector<Scene>& scenes() {
@@ -122,6 +169,13 @@ const std::vector<Scene>& scenes() {
                  w.addBallJoint(*prev, ball, top - Vec3{0, 1.2, 0});
              },
          .showVectors = false},
+        {.name = "Terrain (drag, 1/2/3)",
+         .contacts = true,
+         .build = buildTerrain,
+         .substeps = 4,
+         .camera = OrbitCamera{.yaw = 0.7f, .pitch = 0.5f, .distance = 45.0f, .target = {0, 2, 0}},
+         .showVectors = false,
+         .showContacts = false},
         {"Intermediate axis (Dzhanibekov)", false,
          [](World& w) {
              w.gravity = {};

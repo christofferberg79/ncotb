@@ -74,5 +74,5 @@ docs/      notes
 - [x] 4. Friction
 - [x] 5. Springs, dampers, joints (ball, hinge, slider)
 - [x] 6. Interaction: mouse picking/dragging, impulses, spawning
-- [ ] 7. Heightfield terrain
+- [x] 7. Heightfield terrain
 - [ ] 8. Drivable vehicle

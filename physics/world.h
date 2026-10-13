@@ -135,7 +135,8 @@ private:
     std::vector<Vec3> userForce_, userTorque_; ///< forces added before step(), per body
     std::vector<ContactManifold> contacts_;
     std::vector<CachedPoint> cache_;
-    std::vector<Real> speed_; ///< per body, for the speculative margin
+    std::vector<Real> speed_;                   ///< per body, for the speculative margin
+    std::vector<ContactManifold> pairContacts_; ///< scratch: the contacts of one pair
     Real lastSubstep_ = 0;
     Integrator generic_;
     Real time_ = 0;

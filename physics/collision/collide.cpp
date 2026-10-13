@@ -1,6 +1,7 @@
 #include "collision/collide.h"
 
 #include "body/rigid_body.h"
+#include "collision/collide_internal.h"
 
 #include <algorithm>
 #include <array>
@@ -11,15 +12,15 @@
 namespace ncotb {
 
 namespace {
-
 constexpr Real kEpsilon = 1e-9;
+} // namespace
 
-using Points = std::vector<ContactPoint>;
+namespace detail {
 
 /// Picks at most four points that keep the contact area as large as possible:
 /// the deepest point, the point farthest from it, and the two points that
 /// span the largest triangles on either side of the line between them.
-void reduceToFour(Points& pts, const Vec3& n) {
+void reduceToFour(std::vector<ContactPoint>& pts, const Vec3& n) {
     if (pts.size() <= ContactManifold::kMaxPoints) return;
 
     auto deepest = std::max_element(pts.begin(), pts.end(), [](const ContactPoint& p, const ContactPoint& q) {
@@ -38,11 +39,31 @@ void reduceToFour(Points& pts, const Vec3& n) {
     auto most = std::max_element(pts.begin(), pts.end(), byArea);
     auto least = std::min_element(pts.begin(), pts.end(), byArea);
 
-    Points kept{*deepest, *farthest};
+    std::vector<ContactPoint> kept{*deepest, *farthest};
     if (area(*most) > kEpsilon) kept.push_back(*most);
     if (area(*least) < -kEpsilon) kept.push_back(*least);
     pts = std::move(kept);
 }
+
+/// World-space corners of a box.
+std::array<Vec3, 8> boxCorners(const RigidBody& box) {
+    std::array<Vec3, 8> v;
+    const Vec3& h = box.shape().halfExtents;
+    for (int i = 0; i < 8; ++i) {
+        Vec3 local{(i & 1) ? h.x : -h.x, (i & 2) ? h.y : -h.y, (i & 4) ? h.z : -h.z};
+        v[i] = box.x + box.R() * local;
+    }
+    return v;
+}
+
+} // namespace detail
+
+namespace {
+
+using detail::boxCorners;
+using detail::reduceToFour;
+
+using Points = std::vector<ContactPoint>;
 
 bool finish(ContactManifold& m, const Vec3& normal, Points& pts) {
     if (pts.empty()) return false;
@@ -123,17 +144,6 @@ bool sphereBox(const RigidBody& sphere, const RigidBody& box, ContactManifold& m
 }
 
 // ------------------------------------------------------------------ boxes
-
-/// World-space corners of a box.
-std::array<Vec3, 8> boxCorners(const RigidBody& box) {
-    std::array<Vec3, 8> v;
-    const Vec3& h = box.shape().halfExtents;
-    for (int i = 0; i < 8; ++i) {
-        Vec3 local{(i & 1) ? h.x : -h.x, (i & 2) ? h.y : -h.y, (i & 4) ? h.z : -h.z};
-        v[i] = box.x + box.R() * local;
-    }
-    return v;
-}
 
 bool boxPlane(const RigidBody& box, const RigidBody& plane, ContactManifold& m, Real margin) {
     const Vec3 n = plane.R().column(1);
@@ -303,8 +313,9 @@ int rank(Shape::Type t) {
     case Shape::Type::Sphere: return 0;
     case Shape::Type::Box: return 1;
     case Shape::Type::Plane: return 2;
+    case Shape::Type::Heightfield: return 3;
     }
-    return 3;
+    return 4;
 }
 
 } // namespace
@@ -333,7 +344,8 @@ bool collide(RigidBody& a, RigidBody& b, ContactManifold& m, Real margin) {
         else
             hit = boxPlane(s, t, m, margin);
         break;
-    case T::Plane: break; // plane-plane
+    case T::Plane:
+    case T::Heightfield: break; // with each other: never; heightfields go through the list version
     }
     if (!hit) return false;
 
@@ -343,14 +355,41 @@ bool collide(RigidBody& a, RigidBody& b, ContactManifold& m, Real margin) {
     return true;
 }
 
-Real distance(RigidBody& a, RigidBody& b) {
+void collide(RigidBody& a, RigidBody& b, std::vector<ContactManifold>& out, Real margin) {
     using T = Shape::Type;
-    if (a.shape().type == T::Box && b.shape().type == T::Box) return boxAxes(a, b).maxSeparation();
-    ContactManifold m;
-    if (!collide(a, b, m, INFINITY)) return INFINITY; // plane-plane
-    Real d = INFINITY;
-    for (int i = 0; i < m.count; ++i)
-        d = std::min(d, -m.points[i].depth);
+    const bool terrainA = a.shape().type == T::Heightfield, terrainB = b.shape().type == T::Heightfield;
+    if (!terrainA && !terrainB) {
+        ContactManifold m;
+        if (collide(a, b, m, margin)) out.push_back(m);
+        return;
+    }
+    RigidBody& terrain = terrainB ? b : a;
+    RigidBody& other = terrainB ? a : b;
+    const size_t first = out.size();
+    switch (other.shape().type) {
+    case T::Sphere: detail::sphereTerrain(other, terrain, out, margin); break;
+    case T::Box: detail::boxTerrain(other, terrain, out, margin); break;
+    case T::Plane:
+    case T::Heightfield: break;
+    }
+    if (terrainA) { // computed as (other, terrain): flip back
+        for (size_t i = first; i < out.size(); ++i) {
+            std::swap(out[i].a, out[i].b);
+            out[i].normal = -out[i].normal;
+        }
+    }
+}
+
+Real distance(RigidBody& a, RigidBody& b, Real maxDistance) {
+    using T = Shape::Type;
+    if (a.shape().type == T::Box && b.shape().type == T::Box)
+        return std::min(boxAxes(a, b).maxSeparation(), maxDistance);
+    std::vector<ContactManifold> ms;
+    collide(a, b, ms, maxDistance);
+    Real d = maxDistance;
+    for (const ContactManifold& m : ms)
+        for (int i = 0; i < m.count; ++i)
+            d = std::min(d, -m.points[i].depth);
     return d;
 }
 
