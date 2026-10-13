@@ -511,3 +511,29 @@ the chassis and swings round behind it.
 - steering: Ackermann angles and the turning circle (within 15%);
 - 10 s of loops over rough terrain: in one piece, no wheel in the ground;
 - deterministic.
+
+## Snapshots
+
+Cmd+S (or the panel's "Snapshots" section) writes the complete state to
+`snapshots/<date>-<time>-<scene>.snap`, and the panel loads one back, paused. For bug
+reports: a snapshot loaded into a headless test steps on exactly like the app did.
+
+- **Exact.** Numbers are written with 17 significant digits, which reads back the same
+  double. Besides the bodies (shape, mass, x, q, P, L, material), the file holds the
+  joints' local frames, limits, motors and accumulated impulses, the springs, and the
+  contact warm-start cache: everything the next step reads. A test runs a world with every
+  joint type, terrain and the truck, saves it, loads it, and steps both 2 s on: the states
+  are bit for bit equal, and saving the copy gives the same text.
+- **One fix this needed:** impulses update a body's v and ω incrementally (v += J/m), and
+  those drifted from P/m and I⁻¹L in the last bits; the next step's restitution read the
+  drifted values. `World::step` now recomputes them from P and L at the end, so
+  (x, q, P, L) is the whole state, as in Baraff's formulation.
+- **Self-contained.** The file describes the whole world, so it doesn't depend on how the
+  scene was built; spawned and deleted bodies come back as they were. The app section adds
+  the scene (for its hooks and panel), camera, settings, driver input and the truck: its
+  spec and which bodies and joints are its parts.
+- **Not saved:** mouse joints (a grab is input), and the current contacts (found again by
+  the next step).
+- **Format:** line based, a keyword and its values, `#` for comments, read in a fixed order
+  and strictly: a mismatch stops with the line number. The code is `physics/io/snapshot.*`;
+  it reaches the private state through one friend, `SnapshotAccess`.

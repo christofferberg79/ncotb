@@ -4,6 +4,7 @@
 
 #include <raylib.h>
 
+#include <utility>
 #include <vector>
 
 namespace ncotb::app {
@@ -46,6 +47,9 @@ public:
     bool update(World& world, const Camera3D& camera, const Input& in, bool mouseFree, bool keysFree);
     /// Forget everything (the world was rebuilt).
     void reset();
+    /// Bodies added with 1/2/3 (for "Remove spawned"; saved in snapshots).
+    const std::vector<RigidBody*>& spawned() const { return spawned_; }
+    void setSpawned(std::vector<RigidBody*> bodies) { spawned_ = std::move(bodies); }
     /// True if bodies were removed this frame (indices into world.bodies() changed).
     bool removedBodies() const { return removedBodies_; }
 

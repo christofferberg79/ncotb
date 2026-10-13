@@ -5,6 +5,7 @@ add_library(physics STATIC
   collision/raycast.cpp
   collision/terrain.cpp
   integration/integrator.cpp
+  io/snapshot.cpp
   joints/joint.cpp
   solver/constraint_solver.cpp
   solver/lcp.cpp

@@ -5,6 +5,7 @@
 namespace ncotb {
 
 class RigidBody;
+struct SnapshotAccess; // saves and restores the private state (io/snapshot.cpp)
 
 /// Settings shared by all joints (set by the World from the contact settings).
 struct JointSettings {
@@ -46,6 +47,8 @@ protected:
 
 /// Ball and socket: anchor points on a and b coincide (3 rows, solved as one block).
 class BallJoint : public Joint {
+    friend struct SnapshotAccess;
+
 public:
     /// anchor in world space; the bodies' current poses define the local anchors.
     BallJoint(RigidBody& a, RigidBody& b, const Vec3& anchor);
@@ -69,6 +72,8 @@ protected:
 /// Hinge (revolute): a ball joint plus two angular rows that keep the hinge
 /// axes of a and b aligned. Optional angle limits and a motor about the axis.
 class HingeJoint : public BallJoint {
+    friend struct SnapshotAccess;
+
 public:
     /// anchor and axis in world space, at the bodies' current poses (angle 0).
     HingeJoint(RigidBody& a, RigidBody& b, const Vec3& anchor, const Vec3& axis);
@@ -106,6 +111,8 @@ private:
 /// Slider (prismatic): b may only translate along an axis fixed in a; the
 /// relative rotation is locked. Optional limits and a motor along the axis.
 class SliderJoint : public Joint {
+    friend struct SnapshotAccess;
+
 public:
     /// anchor and axis in world space, at the bodies' current poses (position 0).
     SliderJoint(RigidBody& a, RigidBody& b, const Vec3& anchor, const Vec3& axis);
@@ -155,6 +162,8 @@ private:
 /// A rigid rod between a point on a and a point on b, with ball joints at both
 /// ends: their distance stays fixed (1 row). Like a car's camber link or tie rod.
 class DistanceJoint : public Joint {
+    friend struct SnapshotAccess;
+
 public:
     /// Anchors in world space, on the bodies at their current poses; the rod's
     /// length is their current distance.
@@ -191,6 +200,8 @@ private:
 /// held body also gets angular damping (an interaction choice, not physics:
 /// like extra air resistance while held; 0 turns it off).
 class MouseJoint : public Joint {
+    friend struct SnapshotAccess;
+
 public:
     /// grabPoint in world space, on b at its current pose; the target starts there.
     MouseJoint(RigidBody& ground, RigidBody& b, const Vec3& grabPoint, Real frequency, Real dampingRatio,

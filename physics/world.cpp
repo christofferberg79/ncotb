@@ -101,8 +101,13 @@ void World::step(Real h) {
         detectCollisions(); // for display only
         lastSubstep_ = h;
     }
-    for (auto& b : bodies_)
+    for (auto& b : bodies_) {
         b->clearForces();
+        // Impulses update v and omega incrementally (v += J / m), which drifts a
+        // little from P / m. Recompute them, so (x, q, P, L) is the whole state,
+        // as in Baraff's formulation, and a snapshot of it steps on exactly.
+        b->updateDerived();
+    }
     time_ += h;
 }
 

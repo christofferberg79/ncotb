@@ -79,6 +79,8 @@ struct CarSpec {
 ///
 /// All parts share a collision group, so they don't collide with each other.
 class Car {
+    friend struct SnapshotAccess; // saves and restores the car (io/snapshot.cpp)
+
 public:
     enum Corner { FrontLeft, FrontRight, RearLeft, RearRight };
 
@@ -125,6 +127,10 @@ private:
     struct Pose {
         Vec3 x; ///< in the car's frame
     };
+    /// For restoring from a snapshot: no parts yet.
+    Car(World& world, const CarSpec& spec) : world_(&world), spec_(spec) { computePoses(); }
+    /// The parts' positions in the car's frame (from the spec).
+    void computePoses();
     void build(int collisionGroup);
     /// The spring rate, damping and rest length of a corner's shock.
     void shockTuning(int corner, Real& stiffness, Real& damping, Real& restLength) const;

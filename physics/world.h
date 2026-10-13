@@ -17,6 +17,8 @@ namespace ncotb {
 ///
 /// As an OdeSystem the state is, per body, Baraff's 13 values (x, q, P, L).
 class World : public OdeSystem {
+    friend struct SnapshotAccess; // saves and restores the private state (io/snapshot.cpp)
+
 public:
     static constexpr int kStateSize = 13;
 

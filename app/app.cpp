@@ -7,8 +7,14 @@
 #include <raylib.h>
 #include <rlgl.h>
 
+#include "io/snapshot.h"
+
 #include <algorithm>
+#include <cctype>
 #include <cfloat>
+#include <ctime>
+#include <filesystem>
+#include <fstream>
 #include <numbers>
 #include <string>
 
@@ -79,6 +85,12 @@ void App::handleInput(bool mouseFree, bool keysFree, float dt) {
     if (car) {
         driveInput(keysFree ? dt : 0);
         chase(dt);
+    }
+    // Cmd+S saves a snapshot; with Cmd held the other keys are left alone.
+    const bool cmd = IsKeyDown(KEY_LEFT_SUPER) || IsKeyDown(KEY_RIGHT_SUPER);
+    if (cmd) {
+        if (IsKeyPressed(KEY_S)) saveSnapshot();
+        return;
     }
     if (keysFree) {
         if (car) {
@@ -203,7 +215,7 @@ void App::gui() {
     }
     if (ImGui::Button("Reset (R)")) resetScene();
     ImGui::SameLine();
-    ImGui::Checkbox("Paused (Space)", &paused);
+    ImGui::Checkbox(car ? "Paused (P)" : "Paused (Space)", &paused);
     ImGui::SameLine();
     if (ImGui::Button("Step (S)")) stepOnce = true;
     if (const char* label = scenes()[sceneIndex].actionLabel) {
@@ -236,6 +248,7 @@ void App::gui() {
     ImGui::Checkbox("Show joints", &showJoints);
 
     if (car) carGui();
+    snapshotGui();
     if (contactScene) solverGui();
     contactsGui();
     interaction.gui(world);
@@ -319,6 +332,172 @@ void App::carGui() {
     slider("Top speed (m/s)", s.topSpeed, 2, 30, "%.0f");
     slider("Brake torque (N m)", s.brakeTorque, 0.05f, 2, "%.2f");
     slider("Max steering (rad)", s.maxSteer, 0.1f, 0.6f, "%.2f");
+}
+
+// ---------------------------------------------------------------- snapshots
+
+namespace {
+constexpr const char* kSnapshotDir = "snapshots";
+constexpr const char* kSnapshotMagic = "ncotb-snapshot";
+constexpr int kSnapshotVersion = 1;
+} // namespace
+
+std::string App::saveSnapshot() {
+    namespace fs = std::filesystem;
+    std::error_code ec;
+    fs::create_directories(kSnapshotDir, ec);
+    // snapshots/20261014-153012-rc-truck.snap
+    char stamp[32];
+    const std::time_t now = std::time(nullptr);
+    std::strftime(stamp, sizeof stamp, "%Y%m%d-%H%M%S", std::localtime(&now));
+    std::string slug;
+    for (const char* c = scenes()[sceneIndex].name; *c && *c != '('; ++c)
+        slug += std::isalnum((unsigned char)*c) ? char(std::tolower((unsigned char)*c)) : '-';
+    while (!slug.empty() && slug.back() == '-')
+        slug.pop_back();
+    std::string path = std::string(kSnapshotDir) + "/" + stamp + "-" + slug + ".snap";
+
+    std::ofstream file(path);
+    if (!file) {
+        snapshotStatus = "Couldn't write " + path;
+        return "";
+    }
+    SnapshotWriter out(file);
+    out.key(kSnapshotMagic) << kSnapshotVersion;
+    out.comment(std::string("scene: ") + scenes()[sceneIndex].name);
+    out.comment("saved " + std::string(stamp) + ", t = " + std::to_string(world.time()) + " s");
+    out.key("app");
+    out.key("scene") << sceneIndex;
+    out.key("stepsPerSecond") << stepsPerSecond;
+    out.key("timeScale") << Real(timeScale);
+    out.key("contactSubsteps") << contactSubsteps;
+    out.key("camera") << Real(orbit.yaw) << Real(orbit.pitch) << Real(orbit.distance)
+                      << Vec3{orbit.target.x, orbit.target.y, orbit.target.z};
+    out.key("view") << int(showVectors) << int(showContacts) << int(showNormals) << int(showJoints)
+                    << Real(forceScale);
+    out.key("autoActionDone") << int(autoActionDone);
+    out.key("input") << throttle << steer << brake << int(chaseCamera);
+    out.key("spawned") << int(interaction.spawned().size());
+    for (const RigidBody* b : interaction.spawned())
+        out << ncotb::bodyIndex(world, b);
+    out.key("hasCar") << int(car != nullptr);
+    saveWorld(world, out);
+    if (car) saveCar(*car, world, out);
+    out.end();
+    file.close();
+    if (!file) {
+        snapshotStatus = "Couldn't write " + path;
+        return "";
+    }
+    snapshotStatus = "Saved " + fs::absolute(path).string();
+    listSnapshots();
+    return path;
+}
+
+bool App::loadSnapshot(const std::string& path) {
+    std::ifstream file(path);
+    if (!file) {
+        snapshotStatus = "Couldn't open " + path;
+        return false;
+    }
+    SnapshotReader in(file);
+    in.expect(kSnapshotMagic);
+    if (in.integer() != kSnapshotVersion && !in.failed()) in.fail("unsupported snapshot version");
+    in.expect("app");
+    in.expect("scene");
+    const int scene = in.integer();
+    if (!in.failed() && (scene < 0 || scene >= int(scenes().size())))
+        in.fail("no scene " + std::to_string(scene));
+    if (in.failed()) {
+        snapshotStatus = path + ": " + in.error();
+        return false;
+    }
+    // Set up the scene as usual (hooks, panel defaults), then replace its contents.
+    loadScene(scene);
+    in.expect("stepsPerSecond");
+    stepsPerSecond = in.integer();
+    in.expect("timeScale");
+    timeScale = float(in.real());
+    in.expect("contactSubsteps");
+    contactSubsteps = in.integer();
+    in.expect("camera");
+    orbit.yaw = float(in.real());
+    orbit.pitch = float(in.real());
+    orbit.distance = float(in.real());
+    const Vec3 target = in.vec3();
+    orbit.target = {float(target.x), float(target.y), float(target.z)};
+    in.expect("view");
+    showVectors = in.integer() != 0;
+    showContacts = in.integer() != 0;
+    showNormals = in.integer() != 0;
+    showJoints = in.integer() != 0;
+    forceScale = float(in.real());
+    in.expect("autoActionDone");
+    autoActionDone = in.integer() != 0;
+    in.expect("input");
+    throttle = in.real();
+    steer = in.real();
+    brake = in.real();
+    chaseCamera = in.integer() != 0;
+    in.expect("spawned");
+    std::vector<int> spawned(size_t(std::max(in.integer(), 0)));
+    for (int& i : spawned)
+        i = in.integer();
+    in.expect("hasCar");
+    const bool hasCar = in.integer() != 0;
+
+    car.reset();
+    interaction.reset();
+    bool ok = !in.failed() && loadWorld(world, in);
+    if (ok && hasCar) {
+        car = loadCar(world, in);
+        ok = car != nullptr;
+    }
+    if (!ok) {
+        snapshotStatus = path + ": " + in.error();
+        loadScene(scene); // back to a working scene
+        return false;
+    }
+    std::vector<RigidBody*> bodies;
+    for (int i : spawned)
+        if (i >= 0 && i < int(world.bodies().size())) bodies.push_back(world.bodies()[size_t(i)].get());
+    interaction.setSpawned(std::move(bodies));
+    world.detectCollisions(); // for display
+    energy0 = world.totalEnergy();
+    accumulator = 0;
+    paused = true; // look at the moment first
+    snapshotStatus = "Loaded " + path + " (paused)";
+    return true;
+}
+
+void App::listSnapshots() {
+    namespace fs = std::filesystem;
+    snapshotFiles.clear();
+    std::error_code ec;
+    for (const auto& entry : fs::directory_iterator(kSnapshotDir, ec))
+        if (entry.path().extension() == ".snap") snapshotFiles.push_back(entry.path().string());
+    std::sort(snapshotFiles.rbegin(), snapshotFiles.rend()); // the names start with the time: newest first
+    snapshotChoice = std::clamp(snapshotChoice, 0, std::max(int(snapshotFiles.size()) - 1, 0));
+}
+
+void App::snapshotGui() {
+    if (!ImGui::CollapsingHeader("Snapshots")) return;
+    if (ImGui::Button("Save (Cmd+S)")) saveSnapshot();
+    ImGui::SameLine();
+    if (ImGui::Button("Refresh list") || snapshotFiles.empty()) listSnapshots();
+    if (!snapshotFiles.empty()) {
+        const std::string& current = snapshotFiles[size_t(snapshotChoice)];
+        const std::string shown = std::filesystem::path(current).filename().string();
+        if (ImGui::BeginCombo("File", shown.c_str())) {
+            for (int i = 0; i < int(snapshotFiles.size()); ++i) {
+                const std::string name = std::filesystem::path(snapshotFiles[size_t(i)]).filename().string();
+                if (ImGui::Selectable(name.c_str(), i == snapshotChoice)) snapshotChoice = i;
+            }
+            ImGui::EndCombo();
+        }
+        if (ImGui::Button("Load")) loadSnapshot(snapshotFiles[size_t(snapshotChoice)]);
+    }
+    if (!snapshotStatus.empty()) ImGui::TextWrapped("%s", snapshotStatus.c_str());
 }
 
 void App::solverGui() {

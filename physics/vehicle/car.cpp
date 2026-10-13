@@ -43,7 +43,19 @@ Car::Car(World& world, const CarSpec& spec, const Vec3& position, Real heading, 
       spec_(spec) {
     origin_ = position + Vec3{0, spec.wheelRadius + spec.armDrop, 0};
     orientation_ = Quat::fromAxisAngle({0, 1, 0}, heading);
+    computePoses();
     build(collisionGroup);
+}
+
+void Car::computePoses() {
+    for (int c = 0; c < 4; ++c) {
+        const CornerGeometry g = geometry(spec_, c);
+        const Real z = side(c);
+        armPose_[c].x = (g.lowerPivot + g.lowerOuter) / 2;
+        uprightPose_[c].x = (g.lowerOuter + g.upperOuter) / 2 + Vec3{0, 0, z * kUprightHalfZ};
+        wheelPose_[c].x = g.hub;
+        if (isFront(c)) knucklePose_[c].x = g.kingpin + Vec3{0, 0, z * kKnuckleHalf.z};
+    }
 }
 
 Vec3 Car::local(const Vec3& p) const { return origin_ + rotate(orientation_, p); }
@@ -66,9 +78,6 @@ void Car::build(int collisionGroup) {
     const Real halfLength = (s.armOuter - s.armPivot) / 2;
     for (int c = 0; c < 4; ++c) {
         const CornerGeometry g = geometry(s, c);
-        const Real z = side(c);
-        armPose_[c].x = (g.lowerPivot + g.lowerOuter) / 2;
-        uprightPose_[c].x = (g.lowerOuter + g.upperOuter) / 2 + Vec3{0, 0, z * kUprightHalfZ};
         arms_[c] = add(Shape::box({0.012, 0.008, halfLength}), s.armMass, armPose_[c].x);
         uprights_[c] =
             add(Shape::box({0.012, s.armGap / 2 + 0.008, kUprightHalfZ}), s.uprightMass, uprightPose_[c].x);
@@ -82,13 +91,11 @@ void Car::build(int collisionGroup) {
         RigidBody* holder = uprights_[c];
         if (isFront(c)) {
             const int k = c; // FrontLeft, FrontRight are 0 and 1
-            knucklePose_[k].x = g.kingpin + Vec3{0, 0, z * kKnuckleHalf.z};
             knuckles_[k] = add(Shape::box(kKnuckleHalf), s.knuckleMass, knucklePose_[k].x);
             steer_[k] = hinge(*uprights_[c], *knuckles_[k], g.kingpin, {0, 1, 0});
             steer_[k]->setLimits(-(s.maxSteer + 0.2), s.maxSteer + 0.2);
             holder = knuckles_[k];
         }
-        wheelPose_[c].x = g.hub;
         wheels_[c] = add(Shape::sphere(s.wheelRadius), s.wheelMass, g.hub);
         wheels_[c]->friction = s.wheelFriction;
         wheels_[c]->restitution = 0.1;

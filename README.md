@@ -39,6 +39,7 @@ Controls:
 | **1 / 2 / 3** | **drop a box / drop a ball / throw a ball** at the cursor |
 | **Backspace** | **delete the body under the cursor** |
 | Space / S / R / F | pause / single step / reset scene / scene action |
+| Cmd + S | save a snapshot of the complete state to `snapshots/` (load it in the panel's "Snapshots" section) |
 
 In the RC truck scene:
 

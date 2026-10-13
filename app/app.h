@@ -7,6 +7,8 @@
 
 #include <array>
 #include <memory>
+#include <string>
+#include <vector>
 
 namespace ncotb::app {
 
@@ -38,6 +40,15 @@ struct App {
     Real throttle = 0, steer = 0, brake = 0;
     bool chaseCamera = true;
     float manualOrbit = 0; ///< seconds left in which the chase camera leaves the yaw alone
+
+    // Snapshots (docs/notes.md): files in snapshots/, newest first.
+    std::string snapshotStatus;
+    std::vector<std::string> snapshotFiles;
+    int snapshotChoice = 0;
+    /// Saves the complete state to snapshots/<time>-<scene>.snap; returns the path ("" on failure).
+    std::string saveSnapshot();
+    /// Loads a snapshot (paused); on failure keeps or restores a working scene.
+    bool loadSnapshot(const std::string& path);
 
     // "Move a body" editor: rotation is applied on top of the orientation the
     // body had when it was selected.
@@ -81,6 +92,8 @@ private:
     /// Drops the car if the user deleted one of its parts.
     void checkCar();
     void carGui();
+    void snapshotGui();
+    void listSnapshots();
     void recordHistory();
     void footer();
     void solverGui();
