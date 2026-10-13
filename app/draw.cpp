@@ -224,11 +224,11 @@ void drawTyre(const RigidBody& wheel, const Vec3& axle, Real radius, Real width)
         DrawCylinderEx(toRl(c + side * (s * 0.9)), toRl(face), r * 0.5f, r * 0.5f, 16, {150, 155, 165, 255});
     }
     // Tread lines across the tyre and spokes on the rims, turning with the wheel.
-    Vec3 u = anyPerpendicular(axle);
-    Vec3 v = cross(axle, u);
-    // Express them in the wheel's own frame so they spin with it.
+    // Their directions are fixed in the wheel's own frame (perpendicular to the
+    // axle as the wheel sees it), so they turn with the wheel.
     const Mat3& R = wheel.R();
-    const Vec3 lu = transpose(R) * u, lv = transpose(R) * v;
+    const Vec3 la = transpose(R) * axle; // constant while the wheel spins about it
+    const Vec3 lu = anyPerpendicular(la), lv = cross(la, lu);
     for (int k = 0; k < 12; ++k) {
         const Real a = k * 2 * M_PI / 12;
         Vec3 d = R * (lu * std::cos(a) + lv * std::sin(a));

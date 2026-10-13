@@ -148,9 +148,12 @@ void buildTruckPark(World& w) {
     ground.friction = 0.8;
     ground.restitution = 0.1;
 
-    // A kicker ramp ahead of the start: 1 m long, rising 0.25 m.
-    const Real tilt = 0.25;
-    RigidBody& ramp = w.addBody(Shape::box({0.5, 0.04, 0.35}), 0, {2.6, 0.5 * std::sin(tilt) - 0.03, 0},
+    // A kicker ramp ahead of the start: 1 m long, rising 0.25 m. A solid wedge (a
+    // thick box, mostly buried), not a plank: a wheel could wedge itself under a
+    // plank's raised end.
+    const Real tilt = 0.25, half = 0.2;
+    const Vec3 topCentre{2.6, 0.5 * std::sin(tilt) - 0.01, 0}, up{-std::sin(tilt), std::cos(tilt), 0};
+    RigidBody& ramp = w.addBody(Shape::box({0.5, half, 0.35}), 0, topCentre - up * half,
                                 Quat::fromAxisAngle({0, 0, 1}, tilt));
     ramp.userData = packColor(150, 110, 70);
     ramp.friction = 0.8;
