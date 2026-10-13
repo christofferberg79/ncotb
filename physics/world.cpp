@@ -95,26 +95,110 @@ void World::step(Real h) {
     time_ += h;
 }
 
-void World::detectCollisions() {
+namespace {
+
+/// Upper bound on the speed of any surface point of b: |v| + |omega| r (a sphere
+/// turning in place doesn't move its surface).
+Real speedBound(const RigidBody& b) {
+    if (b.isStatic()) return 0; // also avoids 0 * infinity for planes
+    Real turning = b.shape().type == Shape::Type::Sphere ? 0 : length(b.omega()) * b.shape().boundingRadius();
+    return length(b.v()) + turning;
+}
+
+/// Moves copy to where body will be after time t at its current velocities.
+void predict(RigidBody& copy, const RigidBody& body, Real t) {
+    copy.x = body.x + body.v() * t;
+    copy.q = normalize(Quat::fromRotationVector(body.omega() * t) * body.q);
+    copy.updateDerived();
+}
+
+/// Drops speculative points that won't be reached within h: those whose gap is
+/// larger than margin + h * (closing speed at the point along the normal).
+void keepReachable(ContactManifold& m, Real margin, Real h) {
+    int kept = 0;
+    for (int i = 0; i < m.count; ++i) {
+        const ContactPoint& p = m.points[i];
+        Real closing = -dot(m.normal, m.a->pointVelocity(p.position) - m.b->pointVelocity(p.position));
+        if (-p.depth <= margin + h * std::max(closing, Real(0))) m.points[kept++] = p;
+    }
+    m.count = kept;
+}
+
+/// Speculative contact for a pair that is farther apart than margin now but may
+/// meet within h; speed bounds how fast their gap can shrink. m holds their
+/// contact at the current positions and is replaced.
+///
+/// The normal of a distant contact can be misleading: far from a box, the
+/// nearest feature of a ball passing beside it is an edge, and a contact on that
+/// edge would stop the ball although it never gets there. So find the time of
+/// impact first, by conservative advancement (move both along their velocities
+/// by as much as the gap allows, until it is closed or the step is over), and
+/// take the contact there, moved back to the current positions.
+bool speculate(RigidBody& a, RigidBody& b, ContactManifold& m, Real margin, Real h, Real speed) {
+    RigidBody a2 = a, b2 = b;
+    Real t = 0;
+    for (int i = 0;; ++i) {
+        Real d = distance(a2, b2);
+        if (d <= margin || i == 20) break; // met (or very nearly; take it as met)
+        t += d / speed;
+        if (t >= h) return false;
+        predict(a2, a, t);
+        predict(b2, b, t);
+    }
+    if (!collide(a2, b2, m, margin + (h - t) * speed)) return false;
+    // Back to now: the gap is wider by what closes until t.
+    for (int i = 0; i < m.count; ++i) {
+        ContactPoint& p = m.points[i];
+        p.position = a.x + a.R() * (transpose(a2.R()) * (p.position - a2.x));
+        Real closing = -dot(m.normal, a.pointVelocity(p.position) - b.pointVelocity(p.position));
+        p.depth -= t * closing;
+    }
+    m.a = &a;
+    m.b = &b;
+    keepReachable(m, margin, h);
+    return m.count > 0;
+}
+
+} // namespace
+
+void World::detectCollisions(Real h) {
     contacts_.clear();
     auto joined = [&](const RigidBody* a, const RigidBody* b) {
         for (const auto& j : joints_)
             if ((&j->bodyA() == a && &j->bodyB() == b) || (&j->bodyA() == b && &j->bodyB() == a)) return true;
         return false;
     };
+    speed_.resize(bodies_.size());
+    for (size_t i = 0; i < bodies_.size(); ++i)
+        speed_[i] = h > 0 ? speedBound(*bodies_[i]) : 0;
     ContactManifold m;
     for (size_t i = 0; i < bodies_.size(); ++i) {
         for (size_t j = i + 1; j < bodies_.size(); ++j) {
             RigidBody& a = *bodies_[i];
             RigidBody& b = *bodies_[j];
             if (a.isStatic() && b.isStatic()) continue;
+            // How far the pair can close within the step, at most.
+            const Real margin = contactMargin + h * (speed_[i] + speed_[j]);
             // Cheap rejection with bounding spheres before the exact test.
-            Real reach = a.shape().boundingRadius() + b.shape().boundingRadius() + contactMargin;
+            Real reach = a.shape().boundingRadius() + b.shape().boundingRadius() + margin;
             if (lengthSquared(a.x - b.x) > reach * reach) continue;
             if (!joints_.empty() && joined(&a, &b)) continue;
             // Keep the dynamic body as a, so normals point away from static geometry.
-            bool hit = a.isStatic() ? collide(b, a, m, contactMargin) : collide(a, b, m, contactMargin);
-            if (hit) contacts_.push_back(m);
+            RigidBody& dyn = a.isStatic() ? b : a;
+            RigidBody& other = a.isStatic() ? a : b;
+            if (!collide(dyn, other, m, margin)) continue;
+            if (margin > contactMargin) {
+                // Fast enough to reach farther than contactMargin within the step.
+                Real gap = INFINITY;
+                for (int k = 0; k < m.count; ++k)
+                    gap = std::min(gap, -m.points[k].depth);
+                if (gap <= contactMargin)
+                    keepReachable(m, contactMargin, h); // already touching: keep what it closes on
+                else if (!speculate(dyn, other, m, contactMargin, h, speed_[i] + speed_[j]))
+                    continue;
+                if (m.count == 0) continue;
+            }
+            contacts_.push_back(m);
         }
     }
 }
@@ -162,7 +246,7 @@ void World::stepSemiImplicitEuler(Real h) {
         }
 
         // ... let the solver correct the velocities (contacts and joints) ...
-        detectCollisions();
+        detectCollisions(hs);
         if (resolveContacts) warmStartFromCache();
         solver.prepare(resolveContacts ? contacts_ : noContacts, joints, hs);
         solver.solveVelocities();

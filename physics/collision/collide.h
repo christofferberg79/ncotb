@@ -36,4 +36,10 @@ struct ContactManifold {
 /// plane-plane.
 bool collide(RigidBody& a, RigidBody& b, ContactManifold& m, Real margin = 0);
 
+/// Distance between the shapes of a and b (negative when they overlap), or a
+/// lower bound on it: it is exact except for box-box, where it is the largest
+/// separation along the 15 separating axes. Never more than the true distance,
+/// so a body can safely move this far towards the other (conservative advancement).
+Real distance(RigidBody& a, RigidBody& b);
+
 } // namespace ncotb

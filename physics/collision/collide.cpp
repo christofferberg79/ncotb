@@ -212,7 +212,21 @@ std::pair<Vec3, Vec3> closestOnSegments(const Vec3& p, const Vec3& d, Real hp, c
 
 /// Box-box by the separating axis test over the 15 candidate axes, then face
 /// clipping (face axes) or the closest points of the two edges (edge axes).
-bool boxBox(const RigidBody& a, const RigidBody& b, ContactManifold& m, Real margin) {
+/// A candidate separating axis of two boxes.
+struct Axis {
+    Real sep = -INFINITY; ///< separation along L (negative when overlapping)
+    Vec3 L{};
+    int i = -1, j = -1; // face of a (i), face of b (j), or edge pair (i, j)
+};
+
+/// The 15 separating axes of two boxes: the most separating face axis of a and
+/// of b, and the most separating edge-edge axis.
+struct BoxAxes {
+    Axis faceA, faceB, edge;
+    Real maxSeparation() const { return std::max({faceA.sep, faceB.sep, edge.sep}); }
+};
+
+BoxAxes boxAxes(const RigidBody& a, const RigidBody& b) {
     const Vec3& ha = a.shape().halfExtents;
     const Vec3& hb = b.shape().halfExtents;
     const Vec3 A[3] = {a.R().column(0), a.R().column(1), a.R().column(2)};
@@ -229,28 +243,33 @@ bool boxBox(const RigidBody& a, const RigidBody& b, ContactManifold& m, Real mar
         return std::abs(dot(T, L)) - (ra + rb);
     };
 
-    struct Axis {
-        Real sep = -INFINITY;
-        Vec3 L{};
-        int i = -1, j = -1; // face of a (i), face of b (j), or edge pair (i, j)
-    };
-    Axis faceA, faceB, edge;
+    BoxAxes axes;
     for (int k = 0; k < 3; ++k) {
-        if (Real s = separation(A[k]); s > faceA.sep) faceA = {s, A[k], k, -1};
-        if (Real s = separation(B[k]); s > faceB.sep) faceB = {s, B[k], -1, k};
+        if (Real s = separation(A[k]); s > axes.faceA.sep) axes.faceA = {s, A[k], k, -1};
+        if (Real s = separation(B[k]); s > axes.faceB.sep) axes.faceB = {s, B[k], -1, k};
     }
-    if (faceA.sep > margin || faceB.sep > margin) return false;
     for (int i = 0; i < 3; ++i) {
         for (int j = 0; j < 3; ++j) {
             Vec3 L = cross(A[i], B[j]);
             Real len = length(L);
             if (len < 1e-6) continue; // parallel edges: covered by the face axes
             L /= len;
-            Real s = separation(L);
-            if (s > margin) return false;
-            if (s > edge.sep) edge = {s, L, i, j};
+            if (Real s = separation(L); s > axes.edge.sep) axes.edge = {s, L, i, j};
         }
     }
+    return axes;
+}
+
+bool boxBox(const RigidBody& a, const RigidBody& b, ContactManifold& m, Real margin) {
+    const Vec3& ha = a.shape().halfExtents;
+    const Vec3& hb = b.shape().halfExtents;
+    const Vec3 A[3] = {a.R().column(0), a.R().column(1), a.R().column(2)};
+    const Vec3 B[3] = {b.R().column(0), b.R().column(1), b.R().column(2)};
+    const Vec3 T = a.x - b.x;
+
+    const BoxAxes axes = boxAxes(a, b);
+    if (axes.maxSeparation() > margin) return false;
+    const Axis &faceA = axes.faceA, &faceB = axes.faceB, &edge = axes.edge;
 
     // Prefer face contacts (and faces of b) unless another axis is clearly
     // better, so the reference face doesn't flip back and forth.
@@ -322,6 +341,17 @@ bool collide(RigidBody& a, RigidBody& b, ContactManifold& m, Real margin) {
     m.b = &b;
     if (swapped) m.normal = -m.normal;
     return true;
+}
+
+Real distance(RigidBody& a, RigidBody& b) {
+    using T = Shape::Type;
+    if (a.shape().type == T::Box && b.shape().type == T::Box) return boxAxes(a, b).maxSeparation();
+    ContactManifold m;
+    if (!collide(a, b, m, INFINITY)) return INFINITY; // plane-plane
+    Real d = INFINITY;
+    for (int i = 0; i < m.count; ++i)
+        d = std::min(d, -m.points[i].depth);
+    return d;
 }
 
 } // namespace ncotb

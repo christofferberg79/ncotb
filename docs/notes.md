@@ -228,6 +228,52 @@ The cannon is drawn only and isn't a physics body. Scenes can now set their own 
 camera, overlays, an action (here "Fire", key F, run automatically at t = 1 s) and extra
 drawing.
 
+## Tunnelling: speculative contacts that grow with speed
+
+With a fixed 2 cm contact margin, a body moving farther than the margin plus the
+obstacle's thickness in one step could skip over it. At 30 steps/s with 2 substeps the
+25 m/s cannonball moves 42 cm per substep, and it passed straight through the 30 cm wall.
+
+**The fix** (`World::detectCollisions(h)`):
+
+- **Wider margin for fast pairs.** Each body gets a speed bound, |v| + |ω|·r (r is the
+  bounding radius; spheres spinning in place don't move their surface, so 0 for them).
+  A pair's margin is 2 cm + h · (bound a + bound b), which is everything they could close
+  within the substep. The bounding-sphere rejection grows by the same amount. Slow pairs
+  are as before.
+- **Points they actually reach.** A point is kept only if its gap is at most
+  2 cm + h · (closing speed at that point along the normal). Contacts moving sideways,
+  like a box sliding along the ground, don't get extra points.
+- **Time of impact for distant pairs.** Far from a box, the nearest feature of a ball that
+  is passing *beside* the box is an edge, with a normal that points almost straight at the
+  ball. A contact on that edge stops the ball although it would never get there: a "ghost
+  collision", the classic weakness of speculative contacts. So for a pair farther apart
+  than 2 cm, copies of the bodies are moved along their velocities by conservative
+  advancement: move forward by distance / (speed bound), which can't overshoot, and
+  repeat until the gap is under 2 cm (a hit) or the substep is over (no contact). The
+  contact is taken from where they meet and moved back to the current positions, with
+  the gap widened by what closes until then. `distance()` in collide.cpp gives the
+  distance needed for this. It is exact except for box–box, where it is the largest
+  separation over the 15 SAT axes. That is a lower bound, which is what conservative
+  advancement needs.
+- The solver didn't change: a contact with gap g may close at most g/h, so the body
+  arrives at the surface by the end of the step. The restitution pass then bounces it
+  as usual.
+
+**Cost.** For the brick wall and cannon in a release build, the time per step doesn't
+change measurably: about 5 ms while settling, about 4 ms after the shot, at 30 to
+240 steps/s. Only pairs with a fast body pay anything. A worst case: 200 bodies at
+30 m/s in a closed room at 30 steps/s. Before the fix, 138 of them escaped through the
+walls (0.1 ms per step). After it, none escape (0.6–0.9 ms per step, partly because they
+stay in the room and keep colliding).
+
+**Limits.** The sweep follows straight lines at the current velocity, without gravity
+or rotation along the path. The solver also adds velocity during the step that the
+detection didn't know about, for example a brick hit by the ball. A body accelerated
+like that within one step can still overlap the next body by up to v·h. The contact
+then pushes it out gently, so it doesn't tunnel unless that is more than the next
+body's thickness.
+
 ## Springs, dampers and joints (milestone 5)
 
 **Springs** (`physics/forces/spring.h`) are forces, not constraints:

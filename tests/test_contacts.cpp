@@ -308,3 +308,76 @@ TEST_CASE("Baraff LCP falls back to sequential impulses for very large contact s
     CHECK(w.solver.stats().pivots == 0);
     CHECK(length(boxes.back()->v()) < 1e-3);
 }
+
+TEST_CASE("fast bodies don't tunnel through thin walls at a coarse step") {
+    // 40 m/s at 30 steps/s moves 1.33 m per step: far more than the 10 cm wall
+    // and the bodies themselves are thick.
+    constexpr Real h = 1.0 / 30, speed = 40;
+    for (SolverType solver : kSolvers) {
+        for (bool sphere : {true, false}) {
+            CAPTURE(solver);
+            CAPTURE(sphere);
+            World w;
+            w.gravity = {};
+            w.solver.settings.type = solver;
+            w.addBody(Shape::box({2, 2, 0.05}), 0, {0, 0, 0}).restitution = 0; // wall in the xy-plane
+            Shape shape = sphere ? Shape::sphere(0.1) : Shape::box({0.1, 0.1, 0.1});
+            RigidBody& body = w.addBody(shape, 1, {0.3, -0.2, 3}); // off centre: not a lucky hit
+            body.restitution = 0;
+            body.setLinearVelocity({0, 0, -speed});
+            for (int i = 0; i < 30; ++i)
+                w.step(h);
+            CHECK(body.x.z > 0.05); // still in front of the wall
+            CHECK(body.x.z < 0.2);  // and resting on it, not bounced away
+            CHECK(std::abs(body.v().z) < 0.1);
+        }
+    }
+}
+
+TEST_CASE("a fast ball bounces off a thin wall with its restitution") {
+    constexpr Real h = 1.0 / 30, speed = 40;
+    World w;
+    w.gravity = {};
+    w.addBody(Shape::box({2, 2, 0.05}), 0, {0, 0, 0}).restitution = 0;
+    RigidBody& ball = w.addBody(Shape::sphere(0.1), 1, {0, 0, 3});
+    ball.restitution = 0.5;
+    ball.setLinearVelocity({0, 0, -speed});
+    for (int i = 0; i < 30; ++i)
+        w.step(h);
+    CHECK(ball.v().z == doctest::Approx(0.5 * speed).epsilon(0.01));
+}
+
+TEST_CASE("a fast body passing beside a box is not slowed by speculative contacts") {
+    // Moving parallel to the box's face, 5 cm from it: it never closes the gap.
+    constexpr Real h = 1.0 / 30, speed = 40;
+    for (bool sphere : {true, false}) {
+        CAPTURE(sphere);
+        World w;
+        w.gravity = {};
+        w.addBody(Shape::box({0.5, 0.5, 0.5}), 0, {0, 0, 0});
+        Shape shape = sphere ? Shape::sphere(0.1) : Shape::box({0.1, 0.1, 0.1});
+        RigidBody& body = w.addBody(shape, 1, {0.65, 0, 3});
+        body.setLinearVelocity({0, 0, -speed});
+        for (int i = 0; i < 6; ++i)
+            w.step(h);
+        CHECK(body.x.z < -3);
+        CHECK(body.v().z == -speed);
+        CHECK(body.x.x == 0.65);
+    }
+}
+
+TEST_CASE("a fast ball knocks a free thin plate along instead of passing through") {
+    constexpr Real h = 1.0 / 30;
+    World w;
+    w.gravity = {};
+    RigidBody& plate = w.addBody(Shape::box({1, 1, 0.02}), 1, {0, 0, 0});
+    RigidBody& ball = w.addBody(Shape::sphere(0.1), 1, {0, 0, 3});
+    ball.restitution = plate.restitution = 0;
+    ball.setLinearVelocity({0, 0, -30});
+    for (int i = 0; i < 15; ++i)
+        w.step(h);
+    // Perfectly inelastic: they move on together at half the speed.
+    CHECK(plate.v().z == doctest::Approx(-15).epsilon(0.02));
+    CHECK(ball.v().z == doctest::Approx(-15).epsilon(0.02));
+    CHECK(ball.x.z > plate.x.z);
+}

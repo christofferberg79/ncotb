@@ -86,11 +86,17 @@ public:
     /// Brute-force contact detection over all pairs with at least one dynamic body,
     /// except pairs connected by a joint (a joint decides how they meet).
     /// In each manifold a is dynamic (b may be static).
-    void detectCollisions();
+    ///
+    /// With a step length h > 0 the margin grows with the speed of the pair, so a
+    /// fast body sees what it would hit within the step: a contact point is kept
+    /// if its gap is at most contactMargin + h * (closing speed at that point).
+    /// The solver lets it close the gap but not pass it, so it can't tunnel.
+    void detectCollisions(Real h = 0);
     /// Contacts found by the last detectCollisions() (or step()).
     const std::vector<ContactManifold>& contacts() const { return contacts_; }
-    /// Contacts are also reported for shapes this close but not touching. The
-    /// solver uses them as speculative contacts, so fast bodies stop at the surface.
+    /// Contacts are also reported for shapes this close but not touching (plus the
+    /// distance they close within a step, see detectCollisions). The solver uses
+    /// them as speculative contacts, so fast bodies stop at the surface.
     Real contactMargin = 0.02;
 
     const std::vector<std::unique_ptr<RigidBody>>& bodies() const { return bodies_; }
@@ -129,6 +135,7 @@ private:
     std::vector<Vec3> userForce_, userTorque_; ///< forces added before step(), per body
     std::vector<ContactManifold> contacts_;
     std::vector<CachedPoint> cache_;
+    std::vector<Real> speed_; ///< per body, for the speculative margin
     Real lastSubstep_ = 0;
     Integrator generic_;
     Real time_ = 0;
