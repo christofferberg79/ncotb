@@ -2,6 +2,7 @@
 
 #include "draw.h"
 
+#include <algorithm>
 #include <cmath>
 #include <memory>
 #include <random>
@@ -129,6 +130,45 @@ void buildTerrain(World& w) {
     }
 }
 
+// ---------------------------------------------------------------- RC truck scene
+
+/// Hills at the truck's scale (40 x 40 m, 0.5 m cells), flat around the start,
+/// with a jump ramp, a pyramid of small boxes and some balls.
+void buildTruckPark(World& w) {
+    w.gravity = {0, -9.81, 0};
+    const Heightfield hills = Heightfield::hills(80, 0.5, 1.2, 8, 3);
+    auto blend = [](Real d) { // 0 within 4 m of the start, 1 beyond 9 m, smooth between
+        Real t = std::clamp((d - 4) / 5, Real(0), Real(1));
+        return t * t * (3 - 2 * t);
+    };
+    const Real base = hills.height(0, 0);
+    auto hf = std::make_shared<const Heightfield>(Heightfield::fromFunction(
+        80, 80, 0.5, [&](Real x, Real z) { return (hills.height(x, z) - base) * blend(std::hypot(x, z)); }));
+    RigidBody& ground = w.addBody(Shape::heightfield(hf), 0);
+    ground.friction = 0.8;
+    ground.restitution = 0.1;
+
+    // A kicker ramp ahead of the start: 1 m long, rising 0.25 m.
+    const Real tilt = 0.25;
+    RigidBody& ramp = w.addBody(Shape::box({0.5, 0.04, 0.35}), 0, {2.6, 0.5 * std::sin(tilt) - 0.03, 0},
+                                Quat::fromAxisAngle({0, 0, 1}, tilt));
+    ramp.userData = packColor(150, 110, 70);
+    ramp.friction = 0.8;
+    // A pyramid of small boxes to drive through, and some balls.
+    const Real s = 0.05;
+    for (int row = 0; row < 3; ++row)
+        for (int i = 0; i < 3 - row; ++i) {
+            RigidBody& b =
+                w.addBody(Shape::box({s, s, s}), 0.05,
+                          {-1.5, s + row * 2 * s + 0.001 * row, 1.5 + (i - (2 - row) / 2.0) * 2.05 * s});
+            b.userData = packColor(220, 180, 60);
+        }
+    for (int i = 0; i < 5; ++i) {
+        RigidBody& ball = w.addBody(Shape::sphere(0.07), 0.08, {1.0 + 0.4 * i, 0.07, -1.6});
+        ball.restitution = 0.6;
+    }
+}
+
 } // namespace
 
 const std::vector<Scene>& scenes() {
@@ -176,6 +216,16 @@ const std::vector<Scene>& scenes() {
          .camera = OrbitCamera{.yaw = 0.7f, .pitch = 0.5f, .distance = 45.0f, .target = {0, 2, 0}},
          .showVectors = false,
          .showContacts = false},
+        {.name = "RC truck (WASD, Space brake)",
+         .contacts = true,
+         .build = buildTruckPark,
+         .substeps = 4,
+         .camera = OrbitCamera{.yaw = -1.57f, .pitch = 0.32f, .distance = 1.8f, .target = {0, 0.15f, 0}},
+         .showVectors = false,
+         .showContacts = false,
+         .iterations = 60,
+         .showJoints = false,
+         .car = true},
         {"Intermediate axis (Dzhanibekov)", false,
          [](World& w) {
              w.gravity = {};

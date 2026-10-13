@@ -25,6 +25,12 @@ struct Scene {
     Real autoActionAt = -1;               ///< run the action once at this time (s)
     std::function<void()> decorate{};     ///< extra drawing (in 3D mode), not physics
     std::function<void(World&)> update{}; ///< called after every step (scripted motors etc.)
+    int iterations = 0;                   ///< solver iterations for this scene (0: the default)
+    bool showJoints = true;               ///< draw joint anchors and axes
+    // A drivable car (WASD), standing on the ground below carStart (x, z) and facing carHeading.
+    bool car = false;
+    Vec3 carStart{};
+    Real carHeading = 0;
 };
 
 /// All scenes, in the order of the scene menu.

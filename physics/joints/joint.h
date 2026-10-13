@@ -35,6 +35,8 @@ public:
     /// Anchor points in world space (for drawing and for measuring the error).
     virtual Vec3 anchorA() const = 0;
     virtual Vec3 anchorB() const = 0;
+    /// How far the joint is from holding (m): the gap between the anchors.
+    virtual Real error() const { return length(anchorB() - anchorA()); }
 
 protected:
     RigidBody* a_;
@@ -148,6 +150,31 @@ private:
     Real lower_ = 0, upper_ = 0, motorSpeed_ = 0, maxMotorForce_ = 0;
     Real position_ = 0, h_ = 0;
     Real lowerImpulse_ = 0, upperImpulse_ = 0, motorImpulse_ = 0;
+};
+
+/// A rigid rod between a point on a and a point on b, with ball joints at both
+/// ends: their distance stays fixed (1 row). Like a car's camber link or tie rod.
+class DistanceJoint : public Joint {
+public:
+    /// Anchors in world space, on the bodies at their current poses; the rod's
+    /// length is their current distance.
+    DistanceJoint(RigidBody& a, RigidBody& b, const Vec3& anchorA, const Vec3& anchorB);
+
+    Real length() const { return length_; }
+
+    void prepare(Real h, const JointSettings& settings) override;
+    void warmStart() override;
+    void solve(bool useBias) override;
+    Vec3 anchorA() const override;
+    Vec3 anchorB() const override;
+    Real error() const override;
+
+private:
+    Vec3 localA_, localB_;
+    Real length_;
+    Vec3 rA_{}, rB_{}, n_{}; ///< lever arms and the rod's direction (a to b) this step
+    Real invK_ = 0, bias_ = 0;
+    Real impulse_ = 0; ///< along n on b (a gets the opposite)
 };
 
 /// Pulls a point on body b towards a moving world target, like a stiff spring

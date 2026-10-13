@@ -70,6 +70,48 @@ void BallJoint::solve(bool useBias) {
     a_->applyImpulseAtOffset(-lambda, rA_);
 }
 
+// ------------------------------------------------------------------ distance (rod)
+
+DistanceJoint::DistanceJoint(RigidBody& a, RigidBody& b, const Vec3& anchorA, const Vec3& anchorB)
+    : Joint(a, b),
+      length_(ncotb::length(anchorB - anchorA)) {
+    localA_ = transpose(a.R()) * (anchorA - a.x);
+    localB_ = transpose(b.R()) * (anchorB - b.x);
+}
+
+Vec3 DistanceJoint::anchorA() const { return a_->x + a_->R() * localA_; }
+Vec3 DistanceJoint::anchorB() const { return b_->x + b_->R() * localB_; }
+Real DistanceJoint::error() const { return std::abs(ncotb::length(anchorB() - anchorA()) - length_); }
+
+void DistanceJoint::prepare(Real h, const JointSettings& settings) {
+    settings_ = settings;
+    const RigidBody& a = *a_;
+    const RigidBody& b = *b_;
+    rA_ = a.R() * localA_;
+    rB_ = b.R() * localB_;
+    Vec3 d = (b.x + rB_) - (a.x + rA_);
+    Real len = ncotb::length(d);
+    n_ = len > 1e-9 ? d / len : Vec3{1, 0, 0};
+    // K = 1/m_a + 1/m_b + (r_a x n) . I_a^-1 (r_a x n) + (r_b x n) . I_b^-1 (r_b x n)
+    Vec3 ca = cross(rA_, n_), cb = cross(rB_, n_);
+    invK_ = safeInverse(a.invMass() + b.invMass() + dot(ca, a.Iinv() * ca) + dot(cb, b.Iinv() * cb));
+    bias_ = correction(len - length_, h, settings);
+}
+
+void DistanceJoint::warmStart() {
+    b_->applyImpulseAtOffset(n_ * impulse_, rB_);
+    a_->applyImpulseAtOffset(-n_ * impulse_, rA_);
+}
+
+void DistanceJoint::solve(bool useBias) {
+    // C = |p_b - p_a| - L = 0; dC/dt = n . (v_b - v_a) driven to -bias.
+    Real cdot = dot(n_, velocityAt(*b_, rB_) - velocityAt(*a_, rA_));
+    Real lambda = ((useBias ? -bias_ : 0) - cdot) * invK_;
+    impulse_ += lambda;
+    b_->applyImpulseAtOffset(n_ * lambda, rB_);
+    a_->applyImpulseAtOffset(-n_ * lambda, rA_);
+}
+
 // ------------------------------------------------------------------ hinge
 
 HingeJoint::HingeJoint(RigidBody& a, RigidBody& b, const Vec3& anchor, const Vec3& axis)

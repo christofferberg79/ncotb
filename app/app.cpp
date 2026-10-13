@@ -35,7 +35,25 @@ void App::loadScene(int i) {
         world.substeps = 1; // keep the integrator comparison at the plain step length
     }
     interaction.reset();
+    world.solver.settings.iterations = scene.iterations > 0 ? scene.iterations : SolverSettings{}.iterations;
+    showJoints = scene.showJoints;
+    car.reset();
     scene.build(world);
+    if (scene.car) {
+        // Stand it on whatever is below the start point.
+        Vec3 start = scene.carStart;
+        if (auto hit = world.raycast(start + Vec3{0, 100, 0}, {0, -1, 0}, INFINITY, true)) start = hit->point;
+        car = std::make_unique<Car>(world, CarSpec{}, start, scene.carHeading);
+        car->chassis().userData = packColor(40, 110, 200); // blue body
+        for (RigidBody* b : car->arms())
+            b->userData = packColor(35, 35, 40);
+        for (RigidBody* b : car->uprights())
+            b->userData = packColor(70, 160, 220); // anodised aluminium
+        for (RigidBody* b : car->knuckles())
+            b->userData = packColor(70, 160, 220);
+        throttle = steer = brake = 0;
+        manualOrbit = 0;
+    }
     sceneGravity = world.gravity;
     world.detectCollisions();
     accumulator = 0;
@@ -49,11 +67,26 @@ void App::loadScene(int i) {
 
 void App::handleInput(bool mouseFree, bool keysFree, float dt) {
     bool mouseTaken = interaction.update(world, orbit.camera(), Input::read(), mouseFree, keysFree);
-    if (interaction.removedBodies()) editIndex = -1; // body indices changed
+    if (interaction.removedBodies()) {
+        editIndex = -1; // body indices changed
+        checkCar();
+    }
+    // Orbiting by hand: the chase camera leaves the direction alone for a while.
+    if (mouseFree && !mouseTaken &&
+        (IsMouseButtonDown(MOUSE_BUTTON_LEFT) || IsMouseButtonDown(MOUSE_BUTTON_RIGHT)))
+        manualOrbit = 2;
     orbit.update(mouseFree && !mouseTaken, keysFree, dt);
+    if (car) {
+        driveInput(keysFree ? dt : 0);
+        chase(dt);
+    }
     if (keysFree) {
-        if (IsKeyPressed(KEY_SPACE)) paused = !paused;
-        if (IsKeyPressed(KEY_S)) stepOnce = true;
+        if (car) {
+            if (IsKeyPressed(KEY_P)) paused = !paused; // Space is the brake
+        } else {
+            if (IsKeyPressed(KEY_SPACE)) paused = !paused;
+            if (IsKeyPressed(KEY_S)) stepOnce = true;
+        }
         if (IsKeyPressed(KEY_R)) resetScene();
         if (IsKeyPressed(KEY_F)) runAction();
         if (IsKeyPressed(KEY_C)) resetView();
@@ -71,7 +104,62 @@ void App::recordHistory() {
     historyPos = (historyPos + 1) % kHistory;
 }
 
+void App::driveInput(float dt) {
+    // dt = 0: the keyboard belongs to the panel; let go of everything.
+    const bool keys = dt > 0;
+    const bool forward = keys && IsKeyDown(KEY_W), back = keys && IsKeyDown(KEY_S);
+    const bool left = keys && IsKeyDown(KEY_A), right = keys && IsKeyDown(KEY_D);
+    // S brakes while still rolling forward, then reverses (and W the other way round).
+    const Real v = car->speed();
+    throttle = 0;
+    brake = keys && IsKeyDown(KEY_SPACE) ? 1 : 0;
+    if (forward) {
+        if (v < -0.5)
+            brake = 1;
+        else
+            throttle = 1;
+    } else if (back) {
+        if (v > 0.5)
+            brake = 1;
+        else
+            throttle = -0.6;
+    }
+    // Steering eases in and back, like a thumb on a transmitter.
+    const Real target = (left ? 1 : 0) - (right ? 1 : 0);
+    const Real rate = target == 0 ? 6 : 4;
+    const Real step = rate * Real(keys ? dt : GetFrameTime());
+    steer += std::clamp(target - steer, -step, step);
+    if (keys && IsKeyPressed(KEY_T)) {
+        car->flip();
+        world.detectCollisions();
+    }
+    if (keys && IsKeyPressed(KEY_V)) chaseCamera = !chaseCamera;
+}
+
+void App::chase(float dt) {
+    manualOrbit = std::max(0.0f, manualOrbit - dt);
+    if (!chaseCamera) return;
+    // Follow the chassis, and swing round behind it unless orbited by hand.
+    const Vec3 p = car->chassis().x;
+    const float follow = 1 - std::exp(-12 * dt);
+    orbit.target.x += (float(p.x) - orbit.target.x) * follow;
+    orbit.target.y += (float(p.y) + 0.05f - orbit.target.y) * follow;
+    orbit.target.z += (float(p.z) - orbit.target.z) * follow;
+    const Vec3 f = car->forward();
+    if (manualOrbit > 0 || std::hypot(f.x, f.z) < 0.3) return; // or when it's on its side
+    const float behind = float(std::atan2(-f.x, -f.z));
+    float turn = std::remainder(behind - orbit.yaw, 2 * std::numbers::pi_v<float>);
+    // Faster when driving, so the view isn't dragged round while parked.
+    const float rate = 0.5f + float(std::min(std::abs(car->speed()), 4.0)) * 0.6f;
+    orbit.yaw += turn * (1 - std::exp(-rate * dt));
+}
+
+void App::checkCar() {
+    if (car && !car->intact(world)) car.reset(); // its other parts stay, but can't be driven
+}
+
 void App::stepOnceNow(double h) {
+    if (car) car->drive(throttle, steer, brake);
     world.step(h);
     recordHistory();
     const Scene& scene = scenes()[sceneIndex];
@@ -144,11 +232,17 @@ void App::gui() {
         world.gravity =
             gravityOn ? (lengthSquared(sceneGravity) > 0 ? sceneGravity : Vec3{0, -9.81, 0}) : Vec3{};
     ImGui::Checkbox("Show contacts", &showContacts);
+    ImGui::SameLine();
+    ImGui::Checkbox("Show joints", &showJoints);
 
+    if (car) carGui();
     if (contactScene) solverGui();
     contactsGui();
     interaction.gui(world);
-    if (interaction.removedBodies()) editIndex = -1;
+    if (interaction.removedBodies()) {
+        editIndex = -1;
+        checkCar();
+    }
     editGui();
 
     if (!ImGui::CollapsingHeader("Energy and momentum", ImGuiTreeNodeFlags_DefaultOpen)) {
@@ -181,10 +275,50 @@ void App::gui() {
 
 void App::footer() {
     ImGui::Separator();
+    if (car) ImGui::TextDisabled("W/S: drive  A/D: steer  Space: brake  T: flip  V: chase  P: pause");
     ImGui::TextDisabled("Drag: orbit   Shift+drag: pan   Scroll: zoom");
     ImGui::TextDisabled("Arrows, Q/E: move   C: reset view   %d FPS", GetFPS());
     ImGui::TextDisabled("Drag a body: grab   Opt+click: push   1/2/3: spawn");
     ImGui::End();
+}
+
+void App::carGui() {
+    if (!ImGui::CollapsingHeader("RC truck", ImGuiTreeNodeFlags_DefaultOpen)) return;
+    ImGui::Text("%5.1f km/h", car->speed() * 3.6);
+    ImGui::SameLine();
+    ImGui::ProgressBar(float(std::abs(throttle)), {70, 0}, throttle < 0 ? "reverse" : "throttle");
+    ImGui::SameLine();
+    ImGui::ProgressBar(float(brake), {60, 0}, "brake");
+    float steerShown = float(steer); // display only
+    ImGui::SliderFloat("Steering", &steerShown, -1, 1, "%.2f", ImGuiSliderFlags_NoInput);
+    // Front left, front right | rear left, rear right.
+    ImGui::Text("Spin (rad/s)  %4.0f %4.0f | %4.0f %4.0f", car->wheelSpin(0), car->wheelSpin(1),
+                car->wheelSpin(2), car->wheelSpin(3));
+    ImGui::Text("Travel (mm)   %4.0f %4.0f | %4.0f %4.0f", car->suspensionTravel(0) * 1000,
+                car->suspensionTravel(1) * 1000, car->suspensionTravel(2) * 1000,
+                car->suspensionTravel(3) * 1000);
+    ImGui::SetItemTooltip(
+        "Front left, front right | rear left, rear right. Travel: up from the resting position.");
+    ImGui::Checkbox("Chase camera (V)", &chaseCamera);
+    ImGui::SameLine();
+    if (ImGui::Button("Flip back (T)")) {
+        car->flip();
+        world.detectCollisions();
+    }
+    CarSpec& s = car->spec();
+    auto slider = [](const char* label, Real& value, float lo, float hi, const char* format) {
+        float v = float(value);
+        bool changed = ImGui::SliderFloat(label, &v, lo, hi, format);
+        if (changed) value = v;
+        return changed;
+    };
+    bool retune = slider("Ride frequency (Hz)", s.suspensionFrequency, 1, 8, "%.1f");
+    retune |= slider("Damping ratio", s.suspensionDamping, 0.05f, 2, "%.2f");
+    if (retune) car->retune();
+    slider("Motor torque (N m)", s.motorTorque, 0.05f, 2, "%.2f");
+    slider("Top speed (m/s)", s.topSpeed, 2, 30, "%.0f");
+    slider("Brake torque (N m)", s.brakeTorque, 0.05f, 2, "%.2f");
+    slider("Max steering (rad)", s.maxSteer, 0.1f, 0.6f, "%.2f");
 }
 
 void App::solverGui() {
@@ -197,7 +331,7 @@ void App::solverGui() {
     }
     if (ImGui::SliderInt("Substeps", &contactSubsteps, 1, 16)) world.substeps = contactSubsteps;
     ImGui::BeginDisabled(cs.type != SolverType::SequentialImpulses);
-    ImGui::SliderInt("Iterations", &cs.iterations, 1, 50);
+    ImGui::SliderInt("Iterations", &cs.iterations, 1, 100);
     ImGui::Checkbox("Warm start", &cs.warmStart);
     ImGui::EndDisabled();
     float beta = float(cs.baumgarte), slopMm = float(cs.slop * 1000);
@@ -329,6 +463,8 @@ void App::drawScene() const {
     int i = 0;
     for (auto& b : world.bodies()) {
         if (b->shape().type == Shape::Type::Plane) continue; // drawn below
+        if (car && std::find(car->wheels().begin(), car->wheels().end(), b.get()) != car->wheels().end())
+            continue; // drawn as tyres below
         if (b->isStatic()) {
             drawBody(*b, colorOf(*b, {150, 155, 165, 255}));
             continue;
@@ -340,7 +476,10 @@ void App::drawScene() const {
         }
     }
     if (const auto& decorate = scenes()[sceneIndex].decorate) decorate();
-    drawJoints(world);
+    drawJoints(world, showJoints);
+    if (car)
+        for (int c = 0; c < 4; ++c)
+            drawTyre(car->wheel(c), car->axle(c), car->spec().wheelRadius, car->spec().wheelWidth);
     drawSprings(world);
     // Translucent planes last and without depth writes, so bodies that sink
     // below them stay visible.

@@ -40,6 +40,17 @@ Controls:
 | **Backspace** | **delete the body under the cursor** |
 | Space / S / R / F | pause / single step / reset scene / scene action |
 
+In the RC truck scene:
+
+| Input | Action |
+|---|---|
+| W / S | throttle / reverse (S brakes first while rolling forward, W while rolling back) |
+| A / D | steer left / right |
+| Space | brake |
+| T | put the truck back on its wheels |
+| V | chase camera on / off (orbiting by hand pauses it for 2 s) |
+| P | pause (Space is the brake here) |
+
 ### VS Code
 
 Recommended extensions: clangd, CodeLLDB, CMake Tools (see `.vscode/extensions.json`).
@@ -75,4 +86,4 @@ docs/      notes
 - [x] 5. Springs, dampers, joints (ball, hinge, slider)
 - [x] 6. Interaction: mouse picking/dragging, impulses, spawning
 - [x] 7. Heightfield terrain
-- [ ] 8. Drivable vehicle
+- [x] 8. Drivable vehicle: an RC monster truck with double-wishbone suspension

@@ -28,6 +28,10 @@ public:
     /// Coulomb friction coefficient. A contact uses sqrt(mu_a mu_b).
     Real friction = 0.5;
 
+    /// Bodies in the same non-zero group don't collide with each other (the parts
+    /// of a car, say). 0: collides with everything.
+    int collisionGroup = 0;
+
     /// Free for the application to use (the app stores a colour); ignored by the physics.
     std::uintptr_t userData = 0;
 

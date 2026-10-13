@@ -44,6 +44,8 @@ public:
     BallJoint& addBallJoint(RigidBody& a, RigidBody& b, const Vec3& anchor);
     HingeJoint& addHinge(RigidBody& a, RigidBody& b, const Vec3& anchor, const Vec3& axis);
     SliderJoint& addSlider(RigidBody& a, RigidBody& b, const Vec3& anchor, const Vec3& axis);
+    /// A rigid rod from anchorA on a to anchorB on b (ball joints at both ends).
+    DistanceJoint& addDistanceJoint(RigidBody& a, RigidBody& b, const Vec3& anchorA, const Vec3& anchorB);
     /// A soft "mouse" joint pulling grabPoint on b towards a target (see MouseJoint).
     MouseJoint& addMouseJoint(RigidBody& b, const Vec3& grabPoint, Real frequency, Real dampingRatio,
                               Real maxForce);
@@ -63,6 +65,8 @@ public:
     Spring& addSpring(RigidBody& a, const Vec3& pa, RigidBody& b, const Vec3& pb, Real stiffness,
                       Real damping, Real restLength = -1);
     const std::vector<Spring>& springs() const { return springs_; }
+    /// The spring between a and b (in that order), or nullptr. Valid until springs are added or removed.
+    Spring* findSpring(const RigidBody& a, const RigidBody& b);
 
     /// Advance the simulation by one fixed step h.
     ///
@@ -84,7 +88,8 @@ public:
     Real lastSubstep() const { return lastSubstep_; }
 
     /// Brute-force contact detection over all pairs with at least one dynamic body,
-    /// except pairs connected by a joint (a joint decides how they meet).
+    /// except pairs connected by a joint (a joint decides how they meet) and pairs
+    /// in the same collision group.
     /// In each manifold a is dynamic (b may be static).
     ///
     /// With a step length h > 0 the margin grows with the speed of the pair, so a

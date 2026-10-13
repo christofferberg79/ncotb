@@ -189,12 +189,17 @@ void drawContacts(const std::vector<ContactManifold>& contacts, bool normals, Re
     }
 }
 
-/// Joints: anchors (dark), lines from the bodies' centres to them (grey), hinge
-/// axes (blue) and slider axes (purple).
-void drawJoints(const World& world) {
+/// Joints: rods (dark grey); with details anchors (dark), lines from the
+/// bodies' centres to them (grey), hinge axes (blue) and slider axes (purple).
+void drawJoints(const World& world, bool details) {
     for (const auto& jp : world.joints()) {
         const Joint& j = *jp;
         Vec3 pa = j.anchorA(), pb = j.anchorB();
+        if (dynamic_cast<const DistanceJoint*>(&j)) {
+            DrawCylinderEx(toRl(pa), toRl(pb), 0.004f, 0.004f, 6, {70, 72, 80, 255});
+            continue;
+        }
+        if (!details) continue;
         for (const RigidBody* b : {&j.bodyA(), &j.bodyB()})
             if (!b->isStatic()) DrawLine3D(toRl(b->x), toRl(b == &j.bodyA() ? pa : pb), {90, 90, 100, 255});
         DrawSphere(toRl(pa), 0.035f, {40, 40, 50, 255});
@@ -209,6 +214,34 @@ void drawJoints(const World& world) {
     }
 }
 
+void drawTyre(const RigidBody& wheel, const Vec3& axle, Real radius, Real width) {
+    const Vec3 c = wheel.x, side = axle * (width / 2);
+    const float r = float(radius);
+    DrawCylinderEx(toRl(c - side), toRl(c + side), r, r, 28, {38, 38, 42, 255});
+    // Rims on both faces, a little proud of the tyre.
+    for (Real s : {-1.0, 1.0}) {
+        Vec3 face = c + side * (s * 1.02);
+        DrawCylinderEx(toRl(c + side * (s * 0.9)), toRl(face), r * 0.5f, r * 0.5f, 16, {150, 155, 165, 255});
+    }
+    // Tread lines across the tyre and spokes on the rims, turning with the wheel.
+    Vec3 u = anyPerpendicular(axle);
+    Vec3 v = cross(axle, u);
+    // Express them in the wheel's own frame so they spin with it.
+    const Mat3& R = wheel.R();
+    const Vec3 lu = transpose(R) * u, lv = transpose(R) * v;
+    for (int k = 0; k < 12; ++k) {
+        const Real a = k * 2 * M_PI / 12;
+        Vec3 d = R * (lu * std::cos(a) + lv * std::sin(a));
+        d = normalize(d - axle * dot(d, axle)); // keep it perpendicular to the axle
+        Vec3 p = c + d * (radius * 1.01);
+        DrawLine3D(toRl(p - side), toRl(p + side), {90, 90, 96, 255});
+        if (k % 3 == 0)
+            for (Real s : {-1.0, 1.0})
+                DrawLine3D(toRl(c + side * (s * 1.03)), toRl(c + side * (s * 1.03) + d * (radius * 0.5)),
+                           {60, 60, 66, 255});
+    }
+}
+
 /// Springs as coils: 10 turns around the line between the anchors.
 void drawSprings(const World& world) {
     for (const Spring& sp : world.springs()) {
@@ -218,7 +251,7 @@ void drawSprings(const World& world) {
         Vec3 n = d / len;
         Vec3 u = anyPerpendicular(n), v = cross(n, u);
         const int segments = 120;
-        const Real radius = 0.06;
+        const Real radius = std::min(0.06, 0.12 * len); // short shocks get slim coils
         Vec3 prev = pa;
         for (int i = 1; i <= segments; ++i) {
             Real t = Real(i) / segments, phi = t * 10 * 2 * M_PI;

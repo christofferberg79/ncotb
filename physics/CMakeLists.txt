@@ -8,6 +8,7 @@ add_library(physics STATIC
   joints/joint.cpp
   solver/constraint_solver.cpp
   solver/lcp.cpp
+  vehicle/car.cpp
   world.cpp)
 target_include_directories(physics PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 ncotb_warnings(physics)

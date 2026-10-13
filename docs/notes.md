@@ -427,3 +427,87 @@ low down, earth, rock on the heights and steep slopes, snow on the tops. Faint l
 
 **Cost.** 50 bodies on 80 × 80 m of hills: 0.48 ms per step with 4 substeps, against 0.39 ms on
 the plane (release build).
+
+## The RC truck (milestone 8)
+
+An RC monster truck at about 1:10 scale (0.5 m long, 3 kg), built only from rigid bodies,
+joints and springs (`physics/vehicle/car.*`), so driving it exercises the whole engine. Per
+corner:
+
+- a **lower arm**, hinged to the chassis along the car, and hinged to an **upright** at its
+  outer end;
+- a **camber link** (a rod, the new `DistanceJoint`) from the chassis to the top of the
+  upright, parallel to the arm and as long, so the upright moves up and down without tilting;
+- a **shock** (spring + damper) from a tower on the chassis to the lower arm;
+- at the front a **steering knuckle**, hinged to the upright about a vertical kingpin; its
+  hinge motor is the steering servo;
+- the **wheel**, hinged to the knuckle (front) or upright (rear) about the axle. Wheels are
+  spheres for collision, drawn as tyres.
+
+All parts share a collision group (new: `RigidBody::collisionGroup`), so they don't collide
+with each other.
+
+**Tuning by frequency.** The shocks are set from a ride frequency (2.5 Hz) and a damping
+ratio (0.6), not raw stiffness. The rest length is found by virtual work so that the truck
+stands level with the arms horizontal: per radian the arm turns, every force (the tyre's
+load, the weight of the arm, upright, knuckle and wheel, and the shock) does work, and the
+shock's must cancel the rest. The lever ratio turns the wheel rate into the spring rate.
+
+**Driving.**
+
+- *Motor:* each wheel gets torque T_max · throttle · (1 − ω/ω_max) minus a small drag. The
+  reaction goes to the chassis, where the motor sits. Equal torque on every wheel acts like
+  open differentials. Top speed is where the motor's torque meets its drag: 10.4 m/s
+  (37 km/h).
+- *Brake:* the axle hinges' motors with target speed 0 and limited torque. That's an implicit
+  constraint, so a brake can't overshoot and spin the wheel backwards.
+- *Steering:* each knuckle's servo drives its angle to a target, with Ackermann geometry: both
+  front wheels point at one turning centre on the line of the rear axle, so the inner one
+  turns more.
+
+The app adds WASD and Space, easing the steering in and out, and a chase camera that follows
+the chassis and swings round behind it.
+
+### What went wrong on the way
+
+1. **Single swing arms "jacked".** The first version had one arm per wheel, hinged at hub
+   height. The tyre touches the ground a wheel radius below the hinge, so a sideways force on
+   the tyre turns the arm just as the load does. With rigid bodies and sticking friction,
+   how the weight splits between the normal force and that sideways grip is undetermined,
+   and the solver drifted to the friction limit. At full throttle the rear tyres spent their
+   whole grip pushing the wheels apart (±8 N sideways at μN ≈ 8.4 N) and spun, and the truck
+   pulled a wheelie. The fix is the classic one: a parallelogram (double wishbone), along
+   whose arms a sideways tyre force simply pulls without loading the spring. A test drives
+   at full throttle and checks it goes straight and reaches top speed.
+2. **Redundant constraints slowed the solver down.** The first double wishbone used a
+   hinged upper arm: four hinges around a closed loop, five constraints each, many of them
+   doing the same thing. Parked, the truck kept rocking at 0.2–0.3 rad/s unless the solver
+   ran 200 iterations. With the upper arm replaced by a rod (one constraint), each corner has
+   exactly one way to move and no redundancy, and 50 iterations settle it. The scene uses
+   60 (0.33 ms per step with 4 substeps). Below about 50, a self-sustaining rocking remains.
+   Mass ratios turned out not to matter: heavier wheels or a lighter chassis changed little.
+3. **Not it: coupled friction directions.** Solving each contact's two friction directions
+   as one 2×2 block looked promising for free-spinning wheels, but it changed nothing for the
+   truck. It also made sliding friction wrong: the block's impulse isn't opposite to the
+   slip, so a sliding box got 3% too little friction. Reverted.
+
+### Limits
+
+- **Tyres are rigid spheres.** They grip the ground at a point, with no flex. Sideways
+  forces between the left and right tyres can stay locked in (seen at 2–7 N) and eat into
+  the grip available near its limit. Real tyres flex and "roll out" such forces. A tyre
+  model (sideways stiffness, slip angle, relaxation as it rolls) would fix that. Sideways,
+  the spheres also collide wider than the drawn tyres.
+- **Stiff for the solver.** 16 bodies and 22 joints in tight loops need 60 iterations. A
+  direct solver for the joint tree (Featherstone) would be the next step if that becomes a
+  problem.
+
+**Tests** (`tests/test_vehicle.cpp`):
+
+- at rest: level, arms horizontal, still, joints closed;
+- after a drop: settles, joint drift under 5 mm;
+- full throttle: straight, reaches the computed top speed;
+- braking: stops within the friction-limited distance;
+- steering: Ackermann angles and the turning circle (within 15%);
+- 10 s of loops over rough terrain: in one piece, no wheel in the ground;
+- deterministic.

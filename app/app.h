@@ -2,9 +2,11 @@
 
 #include "camera.h"
 #include "interaction.h"
+#include "vehicle/car.h"
 #include "world.h"
 
 #include <array>
+#include <memory>
 
 namespace ncotb::app {
 
@@ -29,6 +31,13 @@ struct App {
     bool autoActionDone = false;
     Vec3 sceneGravity{}; ///< the scene's own gravity, for the on/off switch
     double accumulator = 0;
+    bool showJoints = true;
+
+    // The scene's car, if it has one, and the driver's input.
+    std::unique_ptr<Car> car;
+    Real throttle = 0, steer = 0, brake = 0;
+    bool chaseCamera = true;
+    float manualOrbit = 0; ///< seconds left in which the chase camera leaves the yaw alone
 
     // "Move a body" editor: rotation is applied on top of the orientation the
     // body had when it was selected.
@@ -66,6 +75,12 @@ struct App {
 
 private:
     void stepOnceNow(double h);
+    /// Driving keys (W/S, A/D, Space, T, V) and the chase camera.
+    void driveInput(float dt);
+    void chase(float dt);
+    /// Drops the car if the user deleted one of its parts.
+    void checkCar();
+    void carGui();
     void recordHistory();
     void footer();
     void solverGui();

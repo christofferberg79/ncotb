@@ -18,7 +18,11 @@ void releaseUnusedTerrainMeshes();
 void drawOutline(const RigidBody& b, Color color);
 void drawArrow(const Vec3& from, const Vec3& dir, Color color);
 void drawContacts(const std::vector<ContactManifold>& contacts, bool normals, Real forceScale, Real h);
-void drawJoints(const World& world);
+/// Joints: rods always; with details also anchors and hinge / slider axes.
+void drawJoints(const World& world, bool details = true);
+/// A wheel body drawn as a tyre: a cylinder about axle (unit, world space)
+/// with tread lines that turn with the wheel.
+void drawTyre(const RigidBody& wheel, const Vec3& axle, Real radius, Real width);
 void drawSprings(const World& world);
 
 /// Body colours are packed into RigidBody::userData as 0xRRGGBBAA.

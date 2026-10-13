@@ -24,6 +24,11 @@ SliderJoint& World::addSlider(RigidBody& a, RigidBody& b, const Vec3& anchor, co
     return static_cast<SliderJoint&>(*joints_.back());
 }
 
+DistanceJoint& World::addDistanceJoint(RigidBody& a, RigidBody& b, const Vec3& anchorA, const Vec3& anchorB) {
+    joints_.push_back(std::make_unique<DistanceJoint>(a, b, anchorA, anchorB));
+    return static_cast<DistanceJoint&>(*joints_.back());
+}
+
 MouseJoint& World::addMouseJoint(RigidBody& b, const Vec3& grabPoint, Real frequency, Real dampingRatio,
                                  Real maxForce) {
     joints_.push_back(std::make_unique<MouseJoint>(ground_, b, grabPoint, frequency, dampingRatio, maxForce));
@@ -59,6 +64,12 @@ std::optional<RayHit> World::raycast(const Vec3& origin, const Vec3& dir, Real m
         if (hit && hit->distance <= maxDistance && (!best || hit->distance < best->distance)) best = hit;
     }
     return best;
+}
+
+Spring* World::findSpring(const RigidBody& a, const RigidBody& b) {
+    for (Spring& s : springs_)
+        if (s.a == &a && s.b == &b) return &s;
+    return nullptr;
 }
 
 Spring& World::addSpring(RigidBody& a, const Vec3& pa, RigidBody& b, const Vec3& pb, Real stiffness,
@@ -181,6 +192,7 @@ void World::detectCollisions(Real h) {
             RigidBody& a = *bodies_[i];
             RigidBody& b = *bodies_[j];
             if (a.isStatic() && b.isStatic()) continue;
+            if (a.collisionGroup != 0 && a.collisionGroup == b.collisionGroup) continue;
             // How far the pair can close within the step, at most.
             const Real margin = contactMargin + h * (speed_[i] + speed_[j]);
             // Cheap rejection with bounding spheres before the exact test.
