@@ -290,7 +290,9 @@ const std::vector<Scene>& scenes() {
          .contacts = true,
          .build = buildBrickWall,
          .substeps = 2, // ~150 bricks and ~1600 contact points: 2 substeps keep it real-time
-         .camera = OrbitCamera{.yaw = 1.3f, .pitch = 0.3f, .distance = 20.0f, .target = {-2.5f, 1.2f, 6.0f}},
+         // The view from a snapshot the user picked: cannon in front, wall beyond.
+         .camera =
+             OrbitCamera{.yaw = 0.755f, .pitch = 0.412f, .distance = 20.0f, .target = {-0.18f, 0.82f, 6.82f}},
          .showVectors = false,
          .showContacts = false,
          .cannon = true},
