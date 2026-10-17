@@ -36,6 +36,7 @@ struct App {
     float gravity = float(kEarthGravity); ///< strength (m/s^2), kept across scenes
     bool gravityOn = true;                ///< off in the zero-g scenes
     double accumulator = 0;
+    double simulationRate = 1; ///< simulated seconds per real second, when the steps can't keep up
     bool showJoints = true;
 
     std::optional<Cannon> cannon; ///< the scene's cannon, if it has one

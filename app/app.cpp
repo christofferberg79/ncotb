@@ -12,6 +12,7 @@
 #include <algorithm>
 #include <cctype>
 #include <cfloat>
+#include <chrono>
 #include <ctime>
 #include <filesystem>
 #include <fstream>
@@ -200,11 +201,29 @@ void App::advance(double frameTime) {
         stepOnce = false;
         return;
     }
+    // Fixed steps for the time that passed. If a frame's steps take longer than
+    // the frame budget, stop and drop the rest: a scene too heavy for real time
+    // runs in slow motion at a smooth frame rate, instead of each frame owing
+    // more steps than the last (the "spiral of death") down to a few frames per second.
     accumulator += std::min(frameTime, 0.1) * timeScale;
+    const auto start = std::chrono::steady_clock::now();
+    const double budget = 0.020; // s of stepping per frame: about 45 frames per second at worst
+    int steps = 0;
+    bool behind = false;
     while (accumulator >= h) {
         stepOnceNow(h);
         accumulator -= h;
+        ++steps;
+        if (std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count() > budget) {
+            behind = accumulator >= h;
+            accumulator = 0;
+            break;
+        }
     }
+    // How fast simulated time runs against the clock (1 = real time), smoothed for the panel.
+    const double wanted = std::min(frameTime, 0.1) * timeScale;
+    const double rate = wanted > 0 ? (behind ? steps * h / wanted : 1.0) : 1.0;
+    simulationRate += (rate - simulationRate) * 0.1;
 }
 
 void App::gui() {
@@ -242,6 +261,12 @@ void App::gui() {
                               "which only semi-implicit Euler has. See docs/notes.md.");
     ImGui::SliderFloat("Time scale", &timeScale, 0.05f, 2.0f, "%.2f", ImGuiSliderFlags_Logarithmic);
     ImGui::SliderInt("Steps / s", &stepsPerSecond, 30, 1000);
+    if (simulationRate < 0.97) {
+        ImGui::SameLine();
+        ImGui::TextColored({1, 0.6f, 0.2f, 1}, "slow motion %.0f%%", simulationRate * 100);
+        ImGui::SetItemTooltip("The steps take longer than real time: the simulation runs slower so\n"
+                              "the frame rate stays smooth. Fewer steps or substeps speed it up.");
+    }
     ImGui::Checkbox("Show omega (yellow) and L (magenta)", &showVectors);
     bool gravityChanged = ImGui::Checkbox("Gravity", &gravityOn);
     ImGui::SameLine();
