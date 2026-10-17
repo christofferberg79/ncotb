@@ -11,48 +11,48 @@ namespace ncotb {
 /// at about 1:10 scale. In the car's frame x points forward, y up and z right.
 struct CarSpec {
     // Chassis (the battery and motor are in it).
-    Vec3 chassisHalfExtents{0.21, 0.03, 0.07};
-    Real chassisMass = 2.2;
+    Vec3 chassisHalfExtents{0.21, 0.03, 0.09};
+    Real chassisMass = 3.5;
     // Where the wheels are: axles at x = +-wheelbase / 2, wheel centres at
     // z = +-track / 2, armDrop below the chassis centre.
-    Real wheelbase = 0.32;
-    Real track = 0.34;
+    Real wheelbase = 0.4;
+    Real track = 0.5;
     Real armDrop = 0.02;
     // Wheels: spheres for collision (drawn as tyres wheelWidth wide).
-    Real wheelRadius = 0.085;
-    Real wheelWidth = 0.07;
-    Real wheelMass = 0.15;
-    Real wheelFriction = 1.0;
+    Real wheelRadius = 0.16;
+    Real wheelWidth = 0.15;
+    Real wheelMass = 0.5;
+    Real wheelFriction = 2.0;
     // Double wishbones: per wheel a lower arm hinged to the chassis at
     // z = +-armPivot and to an upright at z = +-armOuter, and above it, armGap
     // higher, a camber link (a rod) between the same z positions. Equal and
     // parallel, so the upright moves up and down without tilting. The lower arm
     // is lowerArm below the wheel centre.
-    Real armPivot = 0.05;
-    Real armOuter = 0.125;
+    Real armPivot = 0.07;
+    Real armOuter = 0.165;
     Real lowerArm = 0.012;
     Real armGap = 0.045;
-    Real armMass = 0.08;
-    Real uprightMass = 0.06;
+    Real armMass = 0.1;
+    Real uprightMass = 0.08;
     Real armTravel = 0.45; ///< hinge limit, radians either way
     // Front steering knuckles turn on the upright about a vertical kingpin at z = +-kingpin.
     Real kingpin = 0.14;
-    Real knuckleMass = 0.06;
+    Real knuckleMass = 0.08;
     // Shocks: from a tower on the chassis (shockTop above its centre, z = +-shockTopZ)
     // to the arm at z = +-shockArm. Tuned by the ride's natural frequency and
     // damping ratio; the rest length is chosen so the car stands level with the
     // arms horizontal, in Earth gravity.
-    Real shockTop = 0.07;
-    Real shockTopZ = 0.04;
-    Real shockArm = 0.11;
+    Real shockTop = 0.09;
+    Real shockTopZ = 0.08;
+    Real shockArm = 0.15;
     Real suspensionFrequency = 2.5; ///< Hz, of the chassis bouncing on the springs
-    Real suspensionDamping = 0.6;   ///< damping ratio
+    Real suspensionDamping = 0.2;   ///< damping ratio
     // Drive: an electric motor on every wheel (4WD), torque falling linearly to
     // zero at top speed.
-    Real motorTorque = 0.45; ///< N m per wheel at standstill
-    Real topSpeed = 12;      ///< m/s
+    Real motorTorque = 1.4;  ///< N m per wheel at standstill
+    Real topSpeed = 6;       ///< m/s
     Real coastDrag = 0.0005; ///< N m s: the motors' drag when coasting
-    Real brakeTorque = 0.6;  ///< N m per wheel
+    Real brakeTorque = 1.6;  ///< N m per wheel
     // Steering servo.
     Real maxSteer = 0.45; ///< radians, at the centre line (Ackermann sets each wheel)
     Real steerRate = 6;   ///< rad/s, servo speed

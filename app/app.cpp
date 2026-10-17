@@ -375,7 +375,7 @@ void App::carGui() {
     if (retune) car->retune();
     slider("Motor torque (N m)", s.motorTorque, 0.05f, 2, "%.2f");
     slider("Top speed (m/s)", s.topSpeed, 2, 30, "%.0f");
-    slider("Brake torque (N m)", s.brakeTorque, 0.05f, 2, "%.2f");
+    slider("Brake torque (N m)", s.brakeTorque, 0.05f, 4, "%.2f");
     slider("Max steering (rad)", s.maxSteer, 0.1f, 0.6f, "%.2f");
 }
 
