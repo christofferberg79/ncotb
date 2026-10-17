@@ -537,3 +537,37 @@ reports: a snapshot loaded into a headless test steps on exactly like the app di
 - **Format:** line based, a keyword and its values, `#` for comments, read in a fixed order
   and strictly: a mismatch stops with the line number. The code is `physics/io/snapshot.*`;
   it reaches the private state through one friend, `SnapshotAccess`.
+
+## Keeping up with real time: the frame loop and sleeping
+
+The cannon scene ran at 8 FPS while the wall stood and at 100+ after the shot. The cause wasn't
+that the wall's contact forces depend on each other: the iterative solver does the same 10
+passes over every contact however coupled they are (coupling costs accuracy, not time). The
+solver's cost simply grows with the number of contact points, about 2.9 µs per point per step:
+1612 points took 5.1 ms per step, 1110 after the shot 3.4 ms. The budget at 240 steps/s is
+4.17 ms, so the standing wall was just over it.
+
+**Frame loop.** Just over is enough for a collapse: each frame owed more steps than the
+last, up to the cap of 0.1 s of simulation per frame (24 steps, ~120 ms), i.e. 8 FPS (the
+"spiral of death"). Now a frame stops stepping after 20 ms and drops what is left: a scene too
+heavy for real time runs in slow motion at a smooth frame rate, and the panel says how slow.
+The standing wall without sleeping: 40 FPS at 81% speed instead of 8 FPS.
+
+**Sleeping** (`World::sleeping`, on by default). Bodies at rest are skipped until something
+disturbs them, as in Box2D and Bullet:
+
+- *Islands:* dynamic bodies connected by contacts, joints or springs (union-find after each
+  step; static bodies don't connect). An island falls asleep when every body in it has been
+  below 5 cm/s and 0.05 rad/s for 0.5 s; one moving body keeps (or wakes) the whole island.
+- *Asleep:* no gravity, no integration, its contacts aren't detected or solved. They are kept
+  frozen as they were, so `contacts()` still shows the forces and the warm-start cache keeps
+  them for the moment it wakes. Joints between sleeping or static bodies are left out.
+- *Waking:* an awake body touching a sleeping one; a force or torque on it (the truck's
+  motors); setting its velocity; grabbing, pushing or moving it in the panel; removing what it
+  rests on or is joined to; changing a joint's motor or limits (but not a servo re-sending
+  almost the same speed every step, or the truck would never sleep); changing gravity.
+- *Snapshots* save each body's sleep state and the frozen contacts, so loading stays exact.
+
+The standing wall: 0.04 ms per step instead of 5.1 (147 of 148 bodies asleep), 105 FPS at full
+speed. While the bricks fly after a shot it costs what it did, until they settle again. The
+panel has a switch, the number asleep, and "darker" to see who sleeps.

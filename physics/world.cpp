@@ -1,6 +1,8 @@
 #include "world.h"
 
 #include <algorithm>
+#include <numeric>
+#include <unordered_map>
 
 namespace ncotb {
 
@@ -31,6 +33,7 @@ DistanceJoint& World::addDistanceJoint(RigidBody& a, RigidBody& b, const Vec3& a
 
 MouseJoint& World::addMouseJoint(RigidBody& b, const Vec3& grabPoint, Real frequency, Real dampingRatio,
                                  Real maxForce) {
+    b.wake();
     joints_.push_back(std::make_unique<MouseJoint>(ground_, b, grabPoint, frequency, dampingRatio, maxForce));
     return static_cast<MouseJoint&>(*joints_.back());
 }
@@ -40,6 +43,16 @@ void World::removeJoint(const Joint& joint) {
 }
 
 void World::removeBody(const RigidBody& body) {
+    // Whatever it touched or was joined to may now fall: wake it.
+    for (const ContactManifold& m : contacts_) {
+        if (m.a == &body) m.b->wake();
+        if (m.b == &body) m.a->wake();
+    }
+    for (const auto& j : joints_) {
+        if (&j->bodyA() == &body) j->bodyB().wake();
+        if (&j->bodyB() == &body) j->bodyA().wake();
+    }
+    std::erase_if(previous_, [&](const ContactManifold& m) { return m.a == &body || m.b == &body; });
     std::erase_if(joints_, [&](const auto& j) { return &j->bodyA() == &body || &j->bodyB() == &body; });
     std::erase_if(springs_, [&](const Spring& s) { return s.a == &body || s.b == &body; });
     std::erase_if(contacts_, [&](const ContactManifold& m) { return m.a == &body || m.b == &body; });
@@ -97,6 +110,7 @@ void World::step(Real h) {
     if (integrator == IntegratorType::SemiImplicitEuler) {
         stepSemiImplicitEuler(h);
     } else {
+        wakeAll(); // sleeping is only for semi-implicit Euler
         generic_.step(integrator, *this, time_, h);
         detectCollisions(); // for display only
         lastSubstep_ = h;
@@ -181,7 +195,17 @@ void speculate(RigidBody& a, RigidBody& b, std::vector<ContactManifold>& ms, Rea
 
 } // namespace
 
+void World::wakeAll() {
+    for (auto& b : bodies_)
+        b->wake();
+}
+
+int World::sleepingBodies() const {
+    return int(std::count_if(bodies_.begin(), bodies_.end(), [](const auto& b) { return b->asleep; }));
+}
+
 void World::detectCollisions(Real h) {
+    std::swap(previous_, contacts_);
     contacts_.clear();
     auto joined = [&](const RigidBody* a, const RigidBody* b) {
         for (const auto& j : joints_)
@@ -197,6 +221,8 @@ void World::detectCollisions(Real h) {
             RigidBody& a = *bodies_[i];
             RigidBody& b = *bodies_[j];
             if (a.isStatic() && b.isStatic()) continue;
+            // Static or asleep on both sides: their contacts are kept frozen (below).
+            if (!a.isAwake() && !b.isAwake()) continue;
             if (a.collisionGroup != 0 && a.collisionGroup == b.collisionGroup) continue;
             // How far the pair can close within the step, at most.
             const Real margin = contactMargin + h * (speed_[i] + speed_[j]);
@@ -223,15 +249,25 @@ void World::detectCollisions(Real h) {
                     speculate(dyn, other, ms, contactMargin, h, speed_[i] + speed_[j]);
                 }
             }
-            for (const ContactManifold& m : ms)
-                if (m.count > 0) contacts_.push_back(m);
+            for (const ContactManifold& m : ms) {
+                if (m.count == 0) continue;
+                contacts_.push_back(m);
+                // An awake body touching a sleeping one wakes it.
+                if (a.asleep) a.wake();
+                if (b.asleep) b.wake();
+            }
         }
     }
+    // The solved contacts come first; then the frozen ones of sleeping bodies,
+    // as they were (for display, and to warm start them when they wake).
+    solvedContacts_ = contacts_.size();
+    for (const ContactManifold& m : previous_)
+        if (!m.a->isAwake() && !m.b->isAwake()) contacts_.push_back(m);
 }
 
 void World::applyForces(Real /*t*/) {
     for (auto& b : bodies_)
-        if (!b->isStatic()) b->addForce(gravity * b->mass());
+        if (b->isAwake()) b->addForce(gravity * b->mass());
     for (const Spring& s : springs_)
         s.applyForces();
 }
@@ -242,17 +278,17 @@ void World::stepSemiImplicitEuler(Real h) {
     userForce_.resize(bodies_.size());
     userTorque_.resize(bodies_.size());
     for (size_t i = 0; i < bodies_.size(); ++i) {
-        userForce_[i] = bodies_[i]->force;
-        userTorque_[i] = bodies_[i]->torque;
+        RigidBody& b = *bodies_[i];
+        userForce_[i] = b.force;
+        userTorque_[i] = b.torque;
+        // A force from outside (a car's motor, say) wakes the body.
+        if (!sleeping || lengthSquared(b.force) > 0 || lengthSquared(b.torque) > 0) b.wake();
     }
     const int n = std::max(substeps, 1);
     const Real hs = h / n;
     lastSubstep_ = hs;
-    std::vector<ContactManifold> noContacts;
     std::vector<Joint*> joints;
     joints.reserve(joints_.size());
-    for (auto& j : joints_)
-        joints.push_back(j.get());
 
     for (int sub = 0; sub < n; ++sub) {
         for (size_t i = 0; i < bodies_.size(); ++i) {
@@ -265,7 +301,7 @@ void World::stepSemiImplicitEuler(Real h) {
         for (auto& body : bodies_) {
             RigidBody& b = *body;
             b.markStepStart();
-            if (b.isStatic()) continue;
+            if (!b.isAwake()) continue;
             b.P += b.force * hs;
             b.L += b.torque * hs;
             b.updateDerived();
@@ -274,16 +310,81 @@ void World::stepSemiImplicitEuler(Real h) {
         // ... let the solver correct the velocities (contacts and joints) ...
         detectCollisions(hs);
         if (resolveContacts) warmStartFromCache();
-        solver.prepare(resolveContacts ? contacts_ : noContacts, joints, hs);
+        joints.clear(); // those with an awake body (detection may have woken some)
+        for (auto& j : joints_)
+            if (j->bodyA().isAwake() || j->bodyB().isAwake()) joints.push_back(j.get());
+        solver.prepare(resolveContacts ? std::span(contacts_.data(), solvedContacts_)
+                                       : std::span<ContactManifold>(),
+                       joints, hs);
         solver.solveVelocities();
 
         // ... then move the bodies with the new velocities ...
         for (auto& body : bodies_)
-            if (!body->isStatic()) integratePosition(*body, hs);
+            if (body->isAwake()) integratePosition(*body, hs);
 
         // ... and remove the correction velocity again, then bounce.
         solver.relax();
         if (resolveContacts) updateCache();
+    }
+    updateSleep(h);
+}
+
+void World::updateSleep(Real h) {
+    if (!sleeping) return;
+    // Islands: dynamic bodies connected by contacts, joints or springs (union-find).
+    const size_t n = bodies_.size();
+    std::unordered_map<const RigidBody*, size_t> index;
+    for (size_t i = 0; i < n; ++i)
+        index[bodies_[i].get()] = i;
+    std::vector<size_t> parent(n);
+    std::iota(parent.begin(), parent.end(), size_t(0));
+    auto root = [&](size_t i) {
+        while (parent[i] != i)
+            i = parent[i] = parent[parent[i]];
+        return i;
+    };
+    auto join = [&](const RigidBody* a, const RigidBody* b) {
+        if (a->isStatic() || b->isStatic())
+            return; // static bodies (and the ground anchor) don't link islands
+        auto ia = index.find(a), ib = index.find(b);
+        if (ia != index.end() && ib != index.end()) parent[root(ia->second)] = root(ib->second);
+    };
+    for (const ContactManifold& m : contacts_)
+        join(m.a, m.b);
+    for (const auto& j : joints_)
+        join(&j->bodyA(), &j->bodyB());
+    for (const Spring& s : springs_)
+        join(s.a, s.b);
+
+    // How long each awake body has been nearly still. A held body (mouse joint) never is.
+    for (auto& b : bodies_) {
+        if (!b->isAwake()) continue;
+        bool still = length(b->v()) < sleepSpeed && length(b->omega()) < sleepSpin;
+        b->sleepTime = still ? b->sleepTime + h : 0;
+    }
+    for (const auto& j : joints_)
+        if (dynamic_cast<const MouseJoint*>(j.get())) j->bodyB().sleepTime = 0;
+
+    // An island sleeps when all its bodies have been still long enough; one
+    // that isn't wakes the whole island.
+    std::vector<char> ready(n, 1);
+    for (size_t i = 0; i < n; ++i) {
+        const RigidBody& b = *bodies_[i];
+        if (b.isAwake() && b.sleepTime < sleepAfter) ready[root(i)] = 0;
+    }
+    for (size_t i = 0; i < n; ++i) {
+        RigidBody& b = *bodies_[i];
+        if (b.isStatic()) continue;
+        if (ready[root(i)]) {
+            if (!b.asleep) {
+                b.asleep = true;
+                b.P = {};
+                b.L = {};
+                b.updateDerived();
+            }
+        } else if (b.asleep) {
+            b.wake();
+        }
     }
 }
 
@@ -304,7 +405,8 @@ void World::warmStartFromCache() {
     // A new point continues an old one if it is on the same pair and within 2 cm
     // of where the old point was, measured on body a.
     const Real tolerance2 = 0.02 * 0.02;
-    for (ContactManifold& m : contacts_) {
+    for (size_t k = 0; k < solvedContacts_; ++k) {
+        ContactManifold& m = contacts_[k];
         for (int i = 0; i < m.count; ++i) {
             ContactPoint& p = m.points[i];
             Vec3 local = transpose(m.a->R()) * (p.position - m.a->x);

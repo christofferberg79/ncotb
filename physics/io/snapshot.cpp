@@ -317,6 +317,7 @@ struct SnapshotAccess {
                           << s.staggers << s.lcpMaxRows << s.jointMaxCorrection;
         out.comment("solver: type iterations warmStart baumgarte slop maxPush relax restitutionThreshold "
                     "friction staggers lcpMaxRows jointMaxCorrection");
+        out.key("sleeping") << int(w.sleeping) << w.sleepSpeed << w.sleepSpin << w.sleepAfter;
 
         out.key("bodies") << int(w.bodies_.size());
         for (const auto& bp : w.bodies_) {
@@ -342,6 +343,7 @@ struct SnapshotAccess {
             out.key("momentum") << b.P << b.L;
             out.key("material") << b.restitution << b.friction << b.collisionGroup;
             out.key("userData").word(std::to_string(b.userData));
+            out.key("sleep") << int(b.asleep) << b.sleepTime;
         }
 
         auto joints = savedJoints(w);
@@ -359,6 +361,19 @@ struct SnapshotAccess {
         for (const World::CachedPoint& c : w.cache_)
             out.key("point") << bodyIndex(w, c.a) << bodyIndex(w, c.b) << c.localA << c.impulse
                              << c.tangentImpulse;
+
+        // The frozen contacts of sleeping bodies (the step doesn't find them again).
+        std::vector<const ContactManifold*> frozen;
+        for (const ContactManifold& m : w.contacts_)
+            if (!m.a->isAwake() && !m.b->isAwake()) frozen.push_back(&m);
+        out.key("frozen") << int(frozen.size());
+        for (const ContactManifold* m : frozen) {
+            out.key("manifold") << bodyIndex(w, m->a) << bodyIndex(w, m->b) << m->normal << m->count;
+            for (int i = 0; i < m->count; ++i) {
+                const ContactPoint& p = m->points[i];
+                out.key("contact") << p.position << p.depth << p.normalImpulse << p.tangentImpulse;
+            }
+        }
         out.key("end");
         out.end();
     }
@@ -392,6 +407,13 @@ struct SnapshotAccess {
         s.staggers = in.integer();
         s.lcpMaxRows = in.integer();
         s.jointMaxCorrection = in.real();
+        if (in.peek() == "sleeping") {
+            in.expect("sleeping");
+            w.sleeping = in.integer() != 0;
+            w.sleepSpeed = in.real();
+            w.sleepSpin = in.real();
+            w.sleepAfter = in.real();
+        }
 
         in.expect("bodies");
         const int n = in.integer();
@@ -439,6 +461,11 @@ struct SnapshotAccess {
             b.collisionGroup = in.integer();
             in.expect("userData");
             b.userData = std::uintptr_t(std::strtoull(in.word().c_str(), nullptr, 10));
+            if (in.peek() == "sleep") { // not in snapshots from before sleeping
+                in.expect("sleep");
+                b.asleep = in.integer() != 0;
+                b.sleepTime = in.real();
+            }
             b.updateDerived();
         }
 
@@ -471,6 +498,32 @@ struct SnapshotAccess {
             c.impulse = in.real();
             c.tangentImpulse = in.vec3();
             w.cache_.push_back(c);
+        }
+        if (in.peek() == "frozen") { // not in snapshots from before sleeping
+            in.expect("frozen");
+            const int nf = in.integer();
+            for (int i = 0; i < nf && !in.failed(); ++i) {
+                in.expect("manifold");
+                ContactManifold m;
+                m.a = body(w, in);
+                m.b = body(w, in);
+                m.normal = in.vec3();
+                m.count = in.integer();
+                if (m.count < 0 || m.count > ContactManifold::kMaxPoints) {
+                    in.fail("bad contact count");
+                    break;
+                }
+                for (int k = 0; k < m.count; ++k) {
+                    in.expect("contact");
+                    ContactPoint& p = m.points[k];
+                    p.position = in.vec3();
+                    p.depth = in.real();
+                    p.normalImpulse = in.real();
+                    p.tangentImpulse = in.vec3();
+                }
+                w.contacts_.push_back(m);
+            }
+            w.solvedContacts_ = 0;
         }
         in.expect("end");
         w.time_ = time;

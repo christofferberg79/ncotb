@@ -38,6 +38,7 @@ struct App {
     double accumulator = 0;
     double simulationRate = 1; ///< simulated seconds per real second, when the steps can't keep up
     bool showJoints = true;
+    bool showSleeping = false; ///< draw sleeping bodies darker
 
     std::optional<Cannon> cannon; ///< the scene's cannon, if it has one
     /// The scene takes WASD and Space (a car or a cannon): P pauses instead.

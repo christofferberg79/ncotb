@@ -4,6 +4,7 @@
 #include "joints/joint.h"
 #include "math/quat.h"
 
+#include <span>
 #include <vector>
 
 namespace ncotb {
@@ -70,7 +71,7 @@ public:
 
     /// Builds one row per contact point (impulses are stored in the contact
     /// points) and prepares the joints, which are solved in the same passes.
-    void prepare(std::vector<ContactManifold>& contacts, const std::vector<Joint*>& joints, Real h);
+    void prepare(std::span<ContactManifold> contacts, const std::vector<Joint*>& joints, Real h);
     void solveVelocities();
     void relax();
 

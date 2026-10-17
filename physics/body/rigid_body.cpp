@@ -22,6 +22,7 @@ void RigidBody::setAngularVelocity(const Vec3& w) {
     R_ = toMat3(q);
     L = I() * w;
     updateDerived();
+    wake();
 }
 
 Vec3 RigidBody::omegaAt(const Quat& orientation) const {

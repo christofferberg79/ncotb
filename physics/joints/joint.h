@@ -40,6 +40,9 @@ public:
     virtual Real error() const { return length(anchorB() - anchorA()); }
 
 protected:
+    /// Changing a motor or limits must wake sleeping bodies (World::sleeping).
+    void wakeBodies();
+
     RigidBody* a_;
     RigidBody* b_;
     JointSettings settings_{}; ///< from the last prepare()
@@ -79,11 +82,17 @@ public:
     HingeJoint(RigidBody& a, RigidBody& b, const Vec3& anchor, const Vec3& axis);
 
     void setLimits(Real lower, Real upper); ///< radians, lower <= 0 <= upper
-    void disableLimits() { limits_ = false; }
+    void disableLimits() {
+        if (limits_) wakeBodies();
+        limits_ = false;
+    }
     /// Drive the relative angular velocity (b relative to a about the axis)
     /// towards speed, with at most maxTorque.
     void setMotor(Real speed, Real maxTorque);
-    void disableMotor() { motor_ = false; }
+    void disableMotor() {
+        if (motor_) wakeBodies();
+        motor_ = false;
+    }
 
     /// Angle of b relative to a about the axis (radians, 0 at creation).
     Real angle() const;
@@ -118,9 +127,15 @@ public:
     SliderJoint(RigidBody& a, RigidBody& b, const Vec3& anchor, const Vec3& axis);
 
     void setLimits(Real lower, Real upper); ///< metres along the axis
-    void disableLimits() { limits_ = false; }
+    void disableLimits() {
+        if (limits_) wakeBodies();
+        limits_ = false;
+    }
     void setMotor(Real speed, Real maxForce);
-    void disableMotor() { motor_ = false; }
+    void disableMotor() {
+        if (motor_) wakeBodies();
+        motor_ = false;
+    }
 
     Real position() const; ///< displacement of b along the axis (0 at creation)
     bool hasLimits() const { return limits_; }

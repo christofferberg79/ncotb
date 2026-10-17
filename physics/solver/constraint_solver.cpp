@@ -44,7 +44,7 @@ bool ConstraintSolver::useLcp() const {
     return settings.type == SolverType::BaraffLcp && !stats_.lcpTooLarge;
 }
 
-void ConstraintSolver::prepare(std::vector<ContactManifold>& contacts, const std::vector<Joint*>& joints,
+void ConstraintSolver::prepare(std::span<ContactManifold> contacts, const std::vector<Joint*>& joints,
                                Real h) {
     rows_.clear();
     stats_ = {};

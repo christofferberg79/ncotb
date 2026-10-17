@@ -31,7 +31,18 @@ Real clampAccumulate(Real& acc, Real delta, Real lo, Real hi) {
     return acc - old;
 }
 
+/// True if a motor is switched on or its settings change noticeably (a servo
+/// re-sending almost the same speed every step mustn't keep its bodies awake).
+bool motorChanged(bool on, Real oldSpeed, Real oldMax, Real speed, Real max) {
+    return !on || std::abs(speed - oldSpeed) > 1e-3 || max != oldMax;
+}
+
 } // namespace
+
+void Joint::wakeBodies() {
+    a_->wake();
+    b_->wake();
+}
 
 // ------------------------------------------------------------------ ball joint
 
@@ -125,15 +136,18 @@ HingeJoint::HingeJoint(RigidBody& a, RigidBody& b, const Vec3& anchor, const Vec
 }
 
 void HingeJoint::setLimits(Real lower, Real upper) {
+    if (!limits_ || std::min(lower, upper) != lower_ || std::max(lower, upper) != upper_) wakeBodies();
     limits_ = true;
     lower_ = std::min(lower, upper);
     upper_ = std::max(lower, upper);
 }
 
 void HingeJoint::setMotor(Real speed, Real maxTorque) {
+    maxTorque = std::max(maxTorque, Real(0));
+    if (motorChanged(motor_, motorSpeed_, maxMotorTorque_, speed, maxTorque)) wakeBodies();
     motor_ = true;
     motorSpeed_ = speed;
-    maxMotorTorque_ = std::max(maxTorque, Real(0));
+    maxMotorTorque_ = maxTorque;
 }
 
 Vec3 HingeJoint::axis() const { return normalize(a_->R() * localAxisA_); }
@@ -227,15 +241,18 @@ SliderJoint::SliderJoint(RigidBody& a, RigidBody& b, const Vec3& anchor, const V
 }
 
 void SliderJoint::setLimits(Real lower, Real upper) {
+    if (!limits_ || std::min(lower, upper) != lower_ || std::max(lower, upper) != upper_) wakeBodies();
     limits_ = true;
     lower_ = std::min(lower, upper);
     upper_ = std::max(lower, upper);
 }
 
 void SliderJoint::setMotor(Real speed, Real maxForce) {
+    maxForce = std::max(maxForce, Real(0));
+    if (motorChanged(motor_, motorSpeed_, maxMotorForce_, speed, maxForce)) wakeBodies();
     motor_ = true;
     motorSpeed_ = speed;
-    maxMotorForce_ = std::max(maxForce, Real(0));
+    maxMotorForce_ = maxForce;
 }
 
 Vec3 SliderJoint::axis() const { return normalize(a_->R() * localAxis_); }

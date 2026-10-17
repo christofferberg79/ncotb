@@ -63,6 +63,7 @@ bool Interaction::update(World& world, const Camera3D& camera, const Input& in, 
         mouseOwned_ = true;
         if (in.option) {
             // Push: a velocity change pushSpeed along the view ray, at the hit point.
+            hit->body->wake();
             hit->body->applyImpulse(dir * (hit->body->mass() * pushSpeed), hit->point);
             pushPoint_ = hit->point;
             pushDir_ = dir;

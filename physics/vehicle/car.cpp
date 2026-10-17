@@ -166,6 +166,7 @@ void Car::place(const Vec3& position, Real heading) {
         b.P = {};
         b.L = {};
         b.updateDerived();
+        b.wake();
     };
     put(*chassis_, {});
     for (int c = 0; c < 4; ++c) {
@@ -218,6 +219,8 @@ void Car::drive(Real throttle, Real steer, Real brake) {
         const Real z = (k == 0 ? -1 : 1) * s.kingpin;
         Real target = 0;
         if (std::abs(centre) > 1e-6) target = std::atan(s.wheelbase / (s.wheelbase / std::tan(centre) + z));
+        // Turning the wheel wakes a parked truck (the servo alone wouldn't).
+        if (std::abs(target - steer_[k]->angle()) > 0.01) knuckles_[k]->wake();
         Real rate = std::clamp(30 * (target - steer_[k]->angle()), -s.steerRate, s.steerRate);
         steer_[k]->setMotor(rate, s.steerTorque);
     }

@@ -282,7 +282,10 @@ void App::gui() {
     ImGui::BeginDisabled(!gravityOn);
     gravityChanged |= ImGui::SliderFloat("g (m/s^2)", &gravity, 0, 30, "%.2f");
     ImGui::EndDisabled();
-    if (gravityChanged) world.gravity = gravityOn ? Vec3{0, -gravity, 0} : Vec3{};
+    if (gravityChanged) {
+        world.gravity = gravityOn ? Vec3{0, -gravity, 0} : Vec3{};
+        world.wakeAll(); // sleeping bodies don't feel gravity
+    }
     ImGui::Checkbox("Show contacts", &showContacts);
     ImGui::SameLine();
     ImGui::Checkbox("Show joints", &showJoints);
@@ -563,6 +566,14 @@ void App::solverGui() {
         ImGui::EndCombo();
     }
     if (ImGui::SliderInt("Substeps", &contactSubsteps, 1, 16)) world.substeps = contactSubsteps;
+    if (ImGui::Checkbox("Sleeping", &world.sleeping) && !world.sleeping) world.wakeAll();
+    ImGui::SetItemTooltip("Bodies at rest for %.1f s are left out of the step until something\n"
+                          "touches or pushes them.",
+                          world.sleepAfter);
+    ImGui::SameLine();
+    ImGui::Checkbox("darker", &showSleeping);
+    ImGui::SameLine();
+    ImGui::Text("%d asleep", world.sleepingBodies());
     ImGui::BeginDisabled(cs.type != SolverType::SequentialImpulses);
     ImGui::SliderInt("Iterations", &cs.iterations, 1, 100);
     ImGui::Checkbox("Warm start", &cs.warmStart);
@@ -680,6 +691,7 @@ void App::editGui() {
                  Quat::fromAxisAngle({1, 0, 0}, editEulerDeg[0] * k);
         b.q = normalize(r * editBaseQ);
         b.updateDerived();
+        b.wake();
         world.detectCollisions();
     }
 }
@@ -702,7 +714,10 @@ void App::drawScene() const {
             drawBody(*b, colorOf(*b, {150, 155, 165, 255}));
             continue;
         }
-        drawBody(*b, colorOf(*b, palette[i++ % std::size(palette)]));
+        Color c = colorOf(*b, palette[i++ % std::size(palette)]);
+        if (showSleeping && b->asleep)
+            c = {(unsigned char)(c.r * 0.45), (unsigned char)(c.g * 0.45), (unsigned char)(c.b * 0.45), c.a};
+        drawBody(*b, c);
         if (showVectors) {
             drawArrow(b->x, b->omega() * 0.3, {200, 160, 0, 255});
             drawArrow(b->x, b->L * 0.3, MAGENTA);

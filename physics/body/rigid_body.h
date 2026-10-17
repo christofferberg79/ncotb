@@ -32,6 +32,17 @@ public:
     /// of a car, say). 0: collides with everything.
     int collisionGroup = 0;
 
+    /// Sleeping (see World::sleeping): a body at rest long enough is left out of
+    /// the step until something touches or pushes it.
+    bool asleep = false;
+    Real sleepTime = 0; ///< how long it has been nearly still (s)
+    void wake() {
+        asleep = false;
+        sleepTime = 0;
+    }
+    /// A dynamic body that takes part in the step.
+    bool isAwake() const { return !isStatic() && !asleep; }
+
     /// Free for the application to use (the app stores a colour); ignored by the physics.
     std::uintptr_t userData = 0;
 
@@ -76,6 +87,7 @@ public:
     void setLinearVelocity(const Vec3& vel) {
         P = vel * mass_;
         updateDerived();
+        wake();
     }
     /// Sets L = I omega so that the body spins with the given angular velocity.
     void setAngularVelocity(const Vec3& w);

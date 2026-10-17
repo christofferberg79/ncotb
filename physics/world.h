@@ -36,6 +36,8 @@ public:
         joints_.clear();
         springs_.clear();
         contacts_.clear();
+        previous_.clear();
+        solvedContacts_ = 0;
         cache_.clear();
         bodies_.clear();
         time_ = 0;
@@ -87,6 +89,21 @@ public:
     ConstraintSolver solver;
     /// Substeps per step (semi-implicit Euler with contacts).
     int substeps = 1;
+
+    /// Sleeping: an island of bodies (connected by contacts, joints or springs)
+    /// that has stayed below sleepSpeed and sleepSpin for sleepAfter seconds is
+    /// put to sleep: no gravity, no motion, its contacts are kept as they were
+    /// (frozen, still listed in contacts()) and not solved. An awake body
+    /// touching it, a force on it, or setting its velocity wakes it (and with it
+    /// its island). Only with semi-implicit Euler.
+    bool sleeping = true;
+    Real sleepSpeed = 0.05; ///< m/s
+    Real sleepSpin = 0.05;  ///< rad/s
+    Real sleepAfter = 0.5;  ///< s
+    /// Wakes every body (after changing gravity, say).
+    void wakeAll();
+    /// Number of sleeping bodies.
+    int sleepingBodies() const;
     /// false: contacts are only detected, bodies pass through each other.
     bool resolveContacts = true;
     /// Length of the last (sub)step; contact force = impulse / lastSubstep().
@@ -102,7 +119,8 @@ public:
     /// if its gap is at most contactMargin + h * (closing speed at that point).
     /// The solver lets it close the gap but not pass it, so it can't tunnel.
     void detectCollisions(Real h = 0);
-    /// Contacts found by the last detectCollisions() (or step()).
+    /// Contacts found by the last detectCollisions() (or step()): those being
+    /// solved first, then the frozen contacts of sleeping bodies.
     const std::vector<ContactManifold>& contacts() const { return contacts_; }
     /// Contacts are also reported for shapes this close but not touching (plus the
     /// distance they close within a step, see detectCollisions). The solver uses
@@ -129,6 +147,9 @@ private:
     /// Copies impulses from the previous step's contacts to matching new ones.
     void warmStartFromCache();
     void updateCache();
+    /// After a step: islands that have been still long enough go to sleep, and
+    /// sleeping bodies in an island with a moving one wake up.
+    void updateSleep(Real h);
 
     struct CachedPoint {
         const RigidBody* a;
@@ -144,6 +165,8 @@ private:
     std::vector<Spring> springs_;
     std::vector<Vec3> userForce_, userTorque_; ///< forces added before step(), per body
     std::vector<ContactManifold> contacts_;
+    size_t solvedContacts_ = 0;             ///< contacts_[0, solvedContacts_) are solved, the rest frozen
+    std::vector<ContactManifold> previous_; ///< last detection's contacts (for the frozen ones)
     std::vector<CachedPoint> cache_;
     std::vector<Real> speed_;                   ///< per body, for the speculative margin
     std::vector<ContactManifold> pairContacts_; ///< scratch: the contacts of one pair
