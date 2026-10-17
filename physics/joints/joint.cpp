@@ -31,6 +31,11 @@ Real clampAccumulate(Real& acc, Real delta, Real lo, Real hi) {
     return acc - old;
 }
 
+/// Mass and inertia as the position projection sees them: a sleeping (or
+/// static) body doesn't move, as if infinitely heavy.
+Real invMassOf(const RigidBody& b) { return b.isAwake() ? b.invMass() : 0; }
+Mat3 invInertiaOf(const RigidBody& b) { return b.isAwake() ? b.Iinv() : Mat3{}; }
+
 /// True if a motor is switched on or its settings change noticeably (a servo
 /// re-sending almost the same speed every step mustn't keep its bodies awake).
 bool motorChanged(bool on, Real oldSpeed, Real oldMax, Real speed, Real max) {
@@ -81,6 +86,20 @@ void BallJoint::solve(bool useBias) {
     a_->applyImpulseAtOffset(-lambda, rA_);
 }
 
+void BallJoint::solvePosition(Real beta) {
+    RigidBody& a = *a_;
+    RigidBody& b = *b_;
+    if (!a.isAwake() && !b.isAwake()) return;
+    const Vec3 rA = a.R() * localA_, rB = b.R() * localB_;
+    const Vec3 C = (b.x + rB) - (a.x + rA);
+    const Mat3 sa = Mat3::star(rA), sb = Mat3::star(rB);
+    const Mat3 K = Mat3::identity() * (invMassOf(a) + invMassOf(b)) - sa * invInertiaOf(a) * sa -
+                   sb * invInertiaOf(b) * sb;
+    const Vec3 P = inverse(K) * (C * -beta);
+    b.applyPositionImpulse(P, rB);
+    a.applyPositionImpulse(-P, rA);
+}
+
 // ------------------------------------------------------------------ distance (rod)
 
 DistanceJoint::DistanceJoint(RigidBody& a, RigidBody& b, const Vec3& anchorA, const Vec3& anchorB)
@@ -107,6 +126,23 @@ void DistanceJoint::prepare(Real h, const JointSettings& settings) {
     Vec3 ca = cross(rA_, n_), cb = cross(rB_, n_);
     invK_ = safeInverse(a.invMass() + b.invMass() + dot(ca, a.Iinv() * ca) + dot(cb, b.Iinv() * cb));
     bias_ = correction(len - length_, h, settings);
+}
+
+void DistanceJoint::solvePosition(Real beta) {
+    RigidBody& a = *a_;
+    RigidBody& b = *b_;
+    if (!a.isAwake() && !b.isAwake()) return;
+    const Vec3 rA = a.R() * localA_, rB = b.R() * localB_;
+    const Vec3 d = (b.x + rB) - (a.x + rA);
+    const Real len = ncotb::length(d);
+    if (len < 1e-9) return;
+    const Vec3 n = d / len;
+    const Vec3 ca = cross(rA, n), cb = cross(rB, n);
+    const Real K =
+        invMassOf(a) + invMassOf(b) + dot(ca, invInertiaOf(a) * ca) + dot(cb, invInertiaOf(b) * cb);
+    const Real lambda = -beta * (len - length_) * safeInverse(K);
+    b.applyPositionImpulse(n * lambda, rB);
+    a.applyPositionImpulse(n * -lambda, rA);
 }
 
 void DistanceJoint::warmStart() {
@@ -231,6 +267,40 @@ void HingeJoint::solve(bool useBias) {
     BallJoint::solve(useBias);
 }
 
+void HingeJoint::solvePosition(Real beta) {
+    RigidBody& a = *a_;
+    RigidBody& b = *b_;
+    if (!a.isAwake() && !b.isAwake()) return;
+    // Alignment: turn the axes back into line (the 2x2 block across the axis) ...
+    const Vec3 axisA = normalize(a.R() * localAxisA_), axisB = normalize(b.R() * localAxisB_);
+    const Vec3 e = cross(axisA, axisB);
+    const Vec3 t1 = anyPerpendicular(axisA), t2 = cross(axisA, t1);
+    const Mat3 I = invInertiaOf(a) + invInertiaOf(b);
+    const Real k00 = dot(t1, I * t1), k01 = dot(t1, I * t2), k11 = dot(t2, I * t2);
+    const Real det = k00 * k11 - k01 * k01;
+    if (det > 0) {
+        const Real e0 = -beta * dot(e, t1), e1 = -beta * dot(e, t2);
+        const Real l0 = (k11 * e0 - k01 * e1) / det, l1 = (k00 * e1 - k01 * e0) / det;
+        const Vec3 J = t1 * l0 + t2 * l1;
+        b.applyAngularPositionImpulse(J);
+        a.applyAngularPositionImpulse(-J);
+    }
+    // ... back inside the limits, if it went past them ...
+    if (limits_) {
+        const Real angle = this->angle();
+        const Real excess = angle < lower_ ? angle - lower_ : (angle > upper_ ? angle - upper_ : 0);
+        const Vec3 axis = this->axis();
+        const Real k = dot(axis, (invInertiaOf(a) + invInertiaOf(b)) * axis);
+        if (excess != 0 && k > 0) {
+            const Vec3 J = axis * (-beta * excess / k);
+            b.applyAngularPositionImpulse(J);
+            a.applyAngularPositionImpulse(-J);
+        }
+    }
+    // ... then bring the anchors together.
+    BallJoint::solvePosition(beta);
+}
+
 // ------------------------------------------------------------------ slider
 
 SliderJoint::SliderJoint(RigidBody& a, RigidBody& b, const Vec3& anchor, const Vec3& axis) : Joint(a, b) {
@@ -308,6 +378,43 @@ void SliderJoint::prepare(Real h, const JointSettings& settings) {
 
     if (!limits_) lowerImpulse_ = upperImpulse_ = 0;
     if (!motor_) motorImpulse_ = 0;
+}
+
+void SliderJoint::solvePosition(Real beta) {
+    RigidBody& a = *a_;
+    RigidBody& b = *b_;
+    if (!a.isAwake() && !b.isAwake()) return;
+    // The locked rotation: turn b back by the error rotation (world space).
+    const Quat err = b.q * conjugate(a.q * relativeQ0_);
+    const Vec3 e = err.v * (err.s >= 0 ? 2 : -2);
+    const Mat3 I = invInertiaOf(a) + invInertiaOf(b);
+    if (std::abs(determinant(I)) > 0) {
+        const Vec3 J = inverse(I) * (e * -beta);
+        b.applyAngularPositionImpulse(J);
+        a.applyAngularPositionImpulse(-J);
+    }
+    // No offset across the axis (two rows, one after the other), and back
+    // inside the limits along it.
+    const Vec3 axis = this->axis();
+    const Vec3 n1 = anyPerpendicular(axis), n2 = cross(axis, n1);
+    auto row = [&](const Vec3& n, Real error) {
+        const Vec3 rA = a.R() * localA_, rB = b.R() * localB_;
+        const Vec3 d = (b.x + rB) - (a.x + rA);
+        const Vec3 ca = cross(rA + d, n), cb = cross(rB, n);
+        const Real K =
+            invMassOf(a) + invMassOf(b) + dot(ca, invInertiaOf(a) * ca) + dot(cb, invInertiaOf(b) * cb);
+        const Real lambda = -beta * error * safeInverse(K);
+        b.applyPositionImpulse(n * lambda, rB);
+        a.applyPositionImpulse(n * -lambda, rA + d);
+    };
+    auto offset = [&] { return (b.x + b.R() * localB_) - (a.x + a.R() * localA_); };
+    row(n1, dot(offset(), n1));
+    row(n2, dot(offset(), n2));
+    if (limits_) {
+        const Real p = dot(offset(), axis);
+        const Real excess = p < lower_ ? p - lower_ : (p > upper_ ? p - upper_ : 0);
+        if (excess != 0) row(axis, excess);
+    }
 }
 
 void SliderJoint::warmStart() {

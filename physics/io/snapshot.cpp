@@ -318,6 +318,7 @@ struct SnapshotAccess {
         out.comment("solver: type iterations warmStart baumgarte slop maxPush relax restitutionThreshold "
                     "friction staggers lcpMaxRows jointMaxCorrection");
         out.key("sleeping") << int(w.sleeping) << w.sleepSpeed << w.sleepSpin << w.sleepAfter;
+        out.key("projection") << int(s.jointProjection) << s.positionIterations << s.projection;
 
         out.key("bodies") << int(w.bodies_.size());
         for (const auto& bp : w.bodies_) {
@@ -413,6 +414,14 @@ struct SnapshotAccess {
             w.sleepSpeed = in.real();
             w.sleepSpin = in.real();
             w.sleepAfter = in.real();
+        }
+        if (in.peek() == "projection") { // older snapshots: Baumgarte for joints
+            in.expect("projection");
+            s.jointProjection = in.integer() != 0;
+            s.positionIterations = in.integer();
+            s.projection = in.real();
+        } else {
+            s.jointProjection = false;
         }
 
         in.expect("bodies");

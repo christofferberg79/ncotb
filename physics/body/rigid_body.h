@@ -81,6 +81,22 @@ public:
         omega_ += Iinv_ * J;
     }
 
+    /// Position correction (joints' position projection): moves the body as an
+    /// impulse J at offset r would, but in position instead of velocity:
+    /// x += J / m, turned by I^-1 (r x J). Momentum is untouched.
+    void applyPositionImpulse(const Vec3& J, const Vec3& r) {
+        if (!isAwake()) return;
+        x += J * invMass_;
+        q = normalize(Quat::fromRotationVector(Iinv_ * cross(r, J)) * q);
+        updateDerived();
+    }
+    /// The same for a pure rotation: turned by I^-1 J.
+    void applyAngularPositionImpulse(const Vec3& J) {
+        if (!isAwake()) return;
+        q = normalize(Quat::fromRotationVector(Iinv_ * J) * q);
+        updateDerived();
+    }
+
     /// Recompute R, I^-1, v and omega from the state variables.
     void updateDerived();
 

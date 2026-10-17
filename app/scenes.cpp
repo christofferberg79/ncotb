@@ -180,7 +180,7 @@ const std::vector<Scene>& scenes() {
          .camera = OrbitCamera{.yaw = -1.57f, .pitch = 0.32f, .distance = 1.8f, .target = {0, 0.15f, 0}},
          .showVectors = false,
          .showContacts = false,
-         .iterations = 60,
+         .iterations = 80, // the truck's joint loops; see docs/notes.md
          .showJoints = false,
          .car = true},
         {"Intermediate axis (Dzhanibekov)", false,

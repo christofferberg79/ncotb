@@ -281,8 +281,10 @@ void World::stepSemiImplicitEuler(Real h) {
         RigidBody& b = *bodies_[i];
         userForce_[i] = b.force;
         userTorque_[i] = b.torque;
-        // A force from outside (a car's motor, say) wakes the body.
-        if (!sleeping || lengthSquared(b.force) > 0 || lengthSquared(b.torque) > 0) b.wake();
+        // A force from outside (a car's motor, say) wakes a sleeping body. An
+        // awake one keeps counting how long it has been still: a small damping
+        // force (a motor's drag) mustn't keep it from ever falling asleep.
+        if (!sleeping || (b.asleep && (lengthSquared(b.force) > 0 || lengthSquared(b.torque) > 0))) b.wake();
     }
     const int n = std::max(substeps, 1);
     const Real hs = h / n;
@@ -324,6 +326,7 @@ void World::stepSemiImplicitEuler(Real h) {
 
         // ... and remove the correction velocity again, then bounce.
         solver.relax();
+        solver.solvePositions(); // joints: move the bodies to close what drifted apart
         if (resolveContacts) updateCache();
     }
     updateSleep(h);

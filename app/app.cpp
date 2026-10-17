@@ -578,6 +578,15 @@ void App::solverGui() {
     ImGui::SliderInt("Iterations", &cs.iterations, 1, 100);
     ImGui::Checkbox("Warm start", &cs.warmStart);
     ImGui::EndDisabled();
+    ImGui::Checkbox("Joint position projection", &cs.jointProjection);
+    ImGui::SetItemTooltip("On: joints that drifted apart are moved back together after each step.\n"
+                          "Off: they get a correction velocity (Baumgarte), which can keep a car\n"
+                          "rocking. See docs/notes.md.");
+    if (cs.jointProjection) {
+        ImGui::SliderInt("Projection passes", &cs.positionIterations, 1, 16);
+        float fraction = float(cs.projection);
+        if (ImGui::SliderFloat("Projection fraction", &fraction, 0.1f, 1)) cs.projection = fraction;
+    }
     float beta = float(cs.baumgarte), slopMm = float(cs.slop * 1000);
     if (ImGui::SliderFloat("Baumgarte", &beta, 0, 1)) cs.baumgarte = beta;
     if (ImGui::SliderFloat("Slop (mm)", &slopMm, 0, 20)) cs.slop = slopMm / 1000;

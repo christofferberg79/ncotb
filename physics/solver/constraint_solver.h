@@ -33,6 +33,14 @@ struct SolverSettings {
     /// instead. Each pivot solves a dense system, so cost grows like rows^4.
     int lcpMaxRows = 300;
     Real jointMaxCorrection = 2.0; ///< joints: cap on the position-correction velocity
+    /// Joints' position error: corrected by moving the bodies after the step
+    /// (position projection, as in Box2D and Jolt) instead of by a correction
+    /// velocity (Baumgarte). Baumgarte's velocity is taken out again after the
+    /// step, but only as well as the solver converges: in a car's joint loops
+    /// what stays pumps energy in, enough to keep it rocking.
+    bool jointProjection = true;
+    int positionIterations = 4; ///< projection passes over the joints
+    Real projection = 0.5;      ///< fraction of a joint's error removed per pass
 };
 
 struct SolverStats {
@@ -74,6 +82,8 @@ public:
     void prepare(std::span<ContactManifold> contacts, const std::vector<Joint*>& joints, Real h);
     void solveVelocities();
     void relax();
+    /// Position projection for the joints (after the bodies moved), if enabled.
+    void solvePositions();
 
     const SolverStats& stats() const { return stats_; }
 

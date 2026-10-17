@@ -238,7 +238,7 @@ void ConstraintSolver::sequentialImpulses(bool withFriction, bool withJoints, bo
     for (int it = 0; it < settings.iterations; ++it) {
         if (withJoints)
             for (Joint* j : joints_)
-                j->solve(useBias);
+                j->solve(useBias && !settings.jointProjection);
         for (Row& r : rows_) {
             if (withFriction) solveFriction(r);
             Real dLambda = (r.target - normalVelocity(r)) * r.invK;
@@ -247,6 +247,13 @@ void ConstraintSolver::sequentialImpulses(bool withFriction, bool withJoints, bo
             applyRowImpulse(r, r.n * (*r.impulse - old));
         }
     }
+}
+
+void ConstraintSolver::solvePositions() {
+    if (!settings.jointProjection) return;
+    for (int it = 0; it < settings.positionIterations; ++it)
+        for (Joint* j : joints_)
+            j->solvePosition(settings.projection);
 }
 
 /// Staggered projections: exact LCP for the normal impulses with friction and
@@ -268,7 +275,7 @@ void ConstraintSolver::baraffWithFriction(bool useBias) {
         if (!friction && !joints) break;
         for (int it = 0; it < settings.iterations; ++it) {
             for (Joint* jt : joints_)
-                jt->solve(useBias);
+                jt->solve(useBias && !settings.jointProjection);
             if (friction)
                 for (Row& r : rows_)
                     solveFriction(r);

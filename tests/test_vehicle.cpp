@@ -21,7 +21,7 @@ struct CarWorld {
     explicit CarWorld(bool terrain = false, Vec3 start = {}, Real heading = 0) {
         w.gravity = {0, -kG, 0};
         w.substeps = 4;
-        w.solver.settings.iterations = 60; // the truck's joint loops need them (see docs/notes.md)
+        w.solver.settings.iterations = 80; // the truck's joint loops need them (see docs/notes.md)
         if (terrain) {
             auto hf = std::make_shared<const Heightfield>(Heightfield::hills(80, 0.5, 1.2, 8, 3));
             w.addBody(Shape::heightfield(hf), 0).friction = 0.8;
@@ -73,22 +73,32 @@ TEST_CASE("the car's joints hold after a drop") {
     CHECK(t.car->jointError() < 1e-3);
 }
 
-// Known problem (docs/notes.md, "Known problems"): with the big monster-truck
-// wheels the parked truck never quite comes to rest. The iterative solver
-// doesn't converge for its joint loops, and what is left over keeps it rocking
-// slightly (0.1-0.3 rad/s). should_fail: these count as passed while they fail,
-// and turn red once the problem is fixed, as a reminder to remove the marker.
-TEST_CASE("the parked car comes to rest" * doctest::should_fail()) {
-    CarWorld t;
-    t.run(3);
-    CHECK(length(t.car->chassis().v()) < 1e-3);
-    CHECK(length(t.car->chassis().omega()) < 1e-3);
+// The parked truck used to keep rocking slightly: the joints' Baumgarte
+// correction velocity, in the truck's joint loops, pumped energy in (see
+// docs/notes.md, "Joint position projection"). These also run without
+// sleeping, which would otherwise hide it.
+TEST_CASE("the parked car comes to rest") {
+    for (bool sleeping : {true, false}) {
+        CAPTURE(sleeping);
+        CarWorld t;
+        t.w.sleeping = sleeping;
+        t.run(sleeping ? 3 : 8);
+        CHECK(length(t.car->chassis().v()) < 1e-3);
+        CHECK(length(t.car->chassis().omega()) < 1e-3);
+    }
 }
 
-TEST_CASE("the car settles after a drop" * doctest::should_fail()) {
-    CarWorld t(false, {0, 0.3, 0});
-    t.run(2);
-    CHECK(length(t.car->chassis().v()) < 0.01);
+TEST_CASE("the car settles after a drop") {
+    for (bool sleeping : {true, false}) {
+        CAPTURE(sleeping);
+        CarWorld t(false, {0, 0.3, 0});
+        t.w.sleeping = sleeping;
+        t.run(sleeping ? 2 : 6);
+        CHECK(length(t.car->chassis().v()) < 0.01);
+        // Without sleeping a little is left (~0.007 rad/s, from the velocity
+        // solve not quite converging), well below what puts it to sleep.
+        CHECK(length(t.car->chassis().omega()) < (sleeping ? 1e-3 : 0.02));
+    }
 }
 
 TEST_CASE("full throttle: the car drives straight and approaches its top speed") {

@@ -32,6 +32,9 @@ public:
     virtual void prepare(Real h, const JointSettings& settings) = 0;
     virtual void warmStart() = 0;
     virtual void solve(bool useBias) = 0;
+    /// Position projection: move the bodies to remove the fraction beta of the
+    /// joint's position error, without changing velocities (default: nothing).
+    virtual void solvePosition(Real beta) { (void)beta; }
 
     /// Anchor points in world space (for drawing and for measuring the error).
     virtual Vec3 anchorA() const = 0;
@@ -59,6 +62,7 @@ public:
     void prepare(Real h, const JointSettings& settings) override;
     void warmStart() override;
     void solve(bool useBias) override;
+    void solvePosition(Real beta) override;
     Vec3 anchorA() const override;
     Vec3 anchorB() const override;
     /// Impulse on b from the last step (a gets the opposite); force = impulse / h.
@@ -101,6 +105,7 @@ public:
     void prepare(Real h, const JointSettings& settings) override;
     void warmStart() override;
     void solve(bool useBias) override;
+    void solvePosition(Real beta) override;
 
 private:
     Vec3 localAxisA_, localAxisB_; ///< hinge axis in each body
@@ -148,6 +153,7 @@ public:
     void prepare(Real h, const JointSettings& settings) override;
     void warmStart() override;
     void solve(bool useBias) override;
+    void solvePosition(Real beta) override;
     Vec3 anchorA() const override;
     Vec3 anchorB() const override;
 
@@ -189,6 +195,7 @@ public:
     void prepare(Real h, const JointSettings& settings) override;
     void warmStart() override;
     void solve(bool useBias) override;
+    void solvePosition(Real beta) override;
     Vec3 anchorA() const override;
     Vec3 anchorB() const override;
     Real error() const override;

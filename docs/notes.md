@@ -572,15 +572,49 @@ The standing wall: 0.04 ms per step instead of 5.1 (147 of 148 bodies asleep), 1
 speed. While the bricks fly after a shot it costs what it did, until they settle again. The
 panel has a switch, the number asleep, and "darker" to see who sleeps.
 
-## Known problems
+## Joint position projection (the rocking truck)
 
-- **The big-wheeled truck never quite comes to rest.** With the monster-truck dimensions
-  (0.16 m wheels), a parked truck keeps rocking slightly, at 0.1–0.3 rad/s, and so never
-  falls asleep. It is the self-sustaining rocking of the truck chapter: the iterative solver
-  doesn't converge for the truck's joint loops, and the leftover error keeps it moving. With
-  the original 0.085 m wheels 50 iterations settled it. With 0.16 m wheels even 150
-  iterations and 8 substeps don't. Not the cause: the tyres' friction, the damping, or the
-  wheels' mass (0.15–0.8 kg). The two tests that check for rest are marked
-  `doctest::should_fail()`. They count as passed while the problem lasts, and turn red once
-  it's fixed, as a reminder to remove the marker. A likely fix is to solve the truck's
-  joints directly instead of iteratively.
+With its monster-truck wheels (0.16 m) the parked truck never came to rest: it kept rocking at
+0.1–0.3 rad/s, and more velocity iterations (even 150, with 8 substeps) didn't stop it.
+
+**Finding the cause.** One change at a time, the peak rocking between 6 and 8 s:
+
+| Change | Peak rocking |
+|---|---|
+| none | 0.26 rad/s |
+| no friction | 0.10 |
+| slippery tyres | 0.07 |
+| exact LCP for the contacts | 0.14 |
+| softer or stiffer springs, damping | unchanged |
+| **no position correction for the joints** | **0.0000** |
+| correction velocity capped at 1 cm/s | 0.27 |
+
+Without correction a nudge died out within 2 s: the truck itself is stable, and the joints'
+**Baumgarte correction** is the energy source. Each step a joint asks for a velocity that
+closes its gap; the relax pass takes that velocity out again after the bodies moved. But in the
+truck's closed loops the solver doesn't quite converge, so a little of the correction stays in
+the bodies as real momentum, every step. Even capped at 1 cm/s that keeps it rocking; switching
+the correction off only isn't a fix: the joints then drifted 9 mm apart in 20 s of driving.
+
+**The fix: position projection** (`SolverSettings::jointProjection`, on by default; as Box2D
+and Jolt do it). The velocity solve gets no correction for joints. After the bodies moved,
+`ConstraintSolver::solvePositions()` makes a few passes over the joints, each moving its two
+bodies straight towards closing the gap (in proportion to their inverse masses and inertias),
+without touching any velocity: `RigidBody::applyPositionImpulse`. Every joint type has a
+`solvePosition()`: point (ball), axes and limits (hinge), length (rod), rotation, offset and
+limits (slider). 4 passes removing 50% each settle the parked truck completely. Stronger
+projection closes gaps faster when driving hard, but brings a small rocking back; contacts
+don't need it (resting overlaps are within the slop, so there is no push-out to remove).
+
+**Two more things it took:**
+
+- *Iterations:* after a drop a tiny oscillation was left (0.007 rad/s, wheels spinning
+  0.2 rad/s), from the velocity solve not quite converging. That's above the sleep threshold
+  for the wheels, so the truck never fell asleep. With 80 iterations it's gone, and the truck
+  sleeps 1.7 s after a drop (0.46 ms per step while awake, almost nothing asleep).
+- *A force mustn't keep a body awake:* the motors' tiny coast drag is a force, and forces woke
+  bodies, which reset their "still for" timers every step. Now a force wakes only a sleeping
+  body; an awake one keeps counting by its velocity.
+
+The joints open up to 3 mm (0.5 mm with Baumgarte) in 20 s of hard driving over hills, and
+close again right after. Older snapshots load with Baumgarte for joints, as they were saved.
