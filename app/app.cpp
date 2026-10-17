@@ -44,8 +44,10 @@ void App::loadScene(int i) {
     world.solver.settings.iterations = scene.iterations > 0 ? scene.iterations : SolverSettings{}.iterations;
     showJoints = scene.showJoints;
     car.reset();
+    cannon.reset();
     world.gravity = {0, -gravity, 0}; // the panel's strength; a scene may turn it off
     scene.build(world);
+    if (scene.cannon) cannon.emplace(world); // aimed at the wall for this gravity
     if (scene.car) {
         // Stand it on whatever is below the start point.
         Vec3 start = scene.carStart;
@@ -93,9 +95,10 @@ void App::handleInput(bool mouseFree, bool keysFree, float dt) {
         if (IsKeyPressed(KEY_S)) saveSnapshot();
         return;
     }
+    if (cannon && keysFree) cannon->keys(world, dt);
     if (keysFree) {
-        if (car) {
-            if (IsKeyPressed(KEY_P)) paused = !paused; // Space is the brake
+        if (sceneKeys()) {
+            if (IsKeyPressed(KEY_P)) paused = !paused; // Space brakes the car or fires the cannon
         } else {
             if (IsKeyPressed(KEY_SPACE)) paused = !paused;
             if (IsKeyPressed(KEY_S)) stepOnce = true;
@@ -216,7 +219,7 @@ void App::gui() {
     }
     if (ImGui::Button("Reset (R)")) resetScene();
     ImGui::SameLine();
-    ImGui::Checkbox(car ? "Paused (P)" : "Paused (Space)", &paused);
+    ImGui::Checkbox(sceneKeys() ? "Paused (P)" : "Paused (Space)", &paused);
     ImGui::SameLine();
     if (ImGui::Button("Step (S)")) stepOnce = true;
     if (const char* label = scenes()[sceneIndex].actionLabel) {
@@ -260,6 +263,7 @@ void App::gui() {
     ImGui::Checkbox("Show joints", &showJoints);
 
     if (car) carGui();
+    if (cannon) cannon->gui(world);
     snapshotGui();
     if (contactScene) solverGui();
     contactsGui();
@@ -301,6 +305,7 @@ void App::gui() {
 void App::footer() {
     ImGui::Separator();
     if (car) ImGui::TextDisabled("W/S: drive  A/D: steer  Space: brake  T: flip  V: chase  P: pause");
+    if (cannon) ImGui::TextDisabled("WASD: aim  Z/X: powder  F/Space: fire  P: pause");
     ImGui::TextDisabled("Drag: orbit   Shift+drag: pan   Scroll: zoom");
     ImGui::TextDisabled("Arrows, Q/E: move   C: reset view   %d FPS", GetFPS());
     ImGui::TextDisabled("Drag a body: grab   Opt+click: push   1/2/3: spawn");
@@ -393,6 +398,7 @@ std::string App::saveSnapshot() {
     for (const RigidBody* b : interaction.spawned())
         out << ncotb::bodyIndex(world, b);
     out.key("hasCar") << int(car != nullptr);
+    if (cannon) out.key("cannon") << cannon->elevation << cannon->azimuth << cannon->speed;
     saveWorld(world, out);
     if (car) saveCar(*car, world, out);
     out.end();
@@ -457,6 +463,15 @@ bool App::loadSnapshot(const std::string& path) {
         i = in.integer();
     in.expect("hasCar");
     const bool hasCar = in.integer() != 0;
+    if (in.peek() == "cannon") { // only in scenes with one
+        in.expect("cannon");
+        const Real elevation = in.real(), azimuth = in.real(), speed = in.real();
+        if (cannon) {
+            cannon->elevation = elevation;
+            cannon->azimuth = azimuth;
+            cannon->speed = speed;
+        }
+    }
 
     car.reset();
     interaction.reset();
@@ -669,6 +684,7 @@ void App::drawScene() const {
         }
     }
     if (const auto& decorate = scenes()[sceneIndex].decorate) decorate(world);
+    if (cannon) cannon->draw(world);
     drawJoints(world, showJoints);
     if (car)
         for (int c = 0; c < 4; ++c)

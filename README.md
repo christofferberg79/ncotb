@@ -41,6 +41,17 @@ Controls:
 | Space / S / R / F | pause / single step / reset scene / scene action |
 | Cmd + S | save a snapshot of the complete state to `snapshots/` (load it in the panel's "Snapshots" section) |
 
+In the cannon scene:
+
+| Input | Action |
+|---|---|
+| W / S | barrel up / down |
+| A / D | turn left / right |
+| Z / X | less / more powder (muzzle speed) |
+| Shift | fine aiming |
+| F or Space | fire (a dashed arc shows where the ball will go) |
+| P | pause |
+
 In the RC truck scene:
 
 | Input | Action |

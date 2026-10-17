@@ -63,7 +63,7 @@ public:
     /// Nearest body hit by the ray origin + t dir (t in [0, maxDistance]); static
     /// bodies only if includeStatic. dir needn't be normalized.
     std::optional<RayHit> raycast(const Vec3& origin, const Vec3& dir, Real maxDistance = INFINITY,
-                                  bool includeStatic = false);
+                                  bool includeStatic = false) const;
 
     /// Spring with damper between world points pa (on a) and pb (on b), at the
     /// bodies' current poses. restLength < 0: the current distance.

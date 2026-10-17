@@ -13,49 +13,6 @@ namespace {
 
 // ---------------------------------------------------------------- cannon scene
 
-/// The cannon fires from the muzzle at kCannonSpeed (horizontal), aimed so the
-/// ball's arc passes through kCannonTarget on the wall.
-constexpr Vec3 kMuzzle{0.3, 1.05, 13.0};
-constexpr Vec3 kCannonTarget{0.3, 1.7, 0};
-constexpr Real kCannonSpeed = 25;
-
-/// g: the strength of gravity (the cannon aims for it; 0 fires straight).
-Vec3 cannonVelocity(Real g) {
-    Vec3 d = kCannonTarget - kMuzzle;
-    Real horizontal = std::hypot(d.x, d.z);
-    Real t = horizontal / kCannonSpeed;
-    Real vy = (d.y + 0.5 * g * t * t) / t; // rise so gravity brings it down onto the target
-    return {d.x / t, vy, d.z / t};
-}
-
-void drawCannon(const World& w) {
-    const Vec3 dir = normalize(cannonVelocity(length(w.gravity)));
-    const Vec3 breech = kMuzzle - dir * 2.4;
-    const Color iron{45, 47, 52, 255}, wood{110, 70, 40, 255};
-    DrawCylinderEx(toRl(breech), toRl(kMuzzle), 0.5f, 0.4f, 24, iron);
-    DrawCylinderWiresEx(toRl(kMuzzle - dir * 0.15), toRl(kMuzzle), 0.44f, 0.44f, 24, {20, 20, 22, 255});
-    DrawSphere(toRl(breech), 0.5f, iron);
-    // carriage and wheels
-    Vec3 axle = breech + dir * 0.9;
-    DrawCube({float(axle.x), 0.45f, float(axle.z)}, 0.8f, 0.3f, 2.2f, wood);
-    for (int side : {-1, 1}) {
-        ::Vector3 c{float(axle.x + side * 0.55), 0.6f, float(axle.z)};
-        ::Vector3 c2{c.x + side * 0.14f, c.y, c.z};
-        DrawCylinderEx(c, c2, 0.6f, 0.6f, 24, wood);
-        DrawCylinderWiresEx(c, c2, 0.6f, 0.6f, 12, {60, 35, 20, 255});
-    }
-}
-
-void fireCannon(World& w) {
-    RigidBody& ball = w.addBody(Shape::sphere(0.35), 30); // cast iron, about 30 kg
-    ball.x = kMuzzle;
-    ball.restitution = 0.2;
-    ball.friction = 0.4;
-    ball.userData = packColor(40, 42, 48);
-    ball.updateDerived();
-    ball.setLinearVelocity(cannonVelocity(length(w.gravity)));
-}
-
 /// A wall in running bond: every other row is offset by half a brick, with half
 /// bricks at its ends.
 void buildBrickWall(World& w) {
@@ -329,17 +286,14 @@ const std::vector<Scene>& scenes() {
                  ball.restitution = 0;
              }
          }},
-        {.name = "Cannon vs brick wall (F: fire)",
+        {.name = "Cannon vs brick wall (WASD aim, F: fire)",
          .contacts = true,
          .build = buildBrickWall,
          .substeps = 2, // ~150 bricks and ~1600 contact points: 2 substeps keep it real-time
          .camera = OrbitCamera{.yaw = 1.3f, .pitch = 0.3f, .distance = 20.0f, .target = {-2.5f, 1.2f, 6.0f}},
          .showVectors = false,
          .showContacts = false,
-         .actionLabel = "Fire",
-         .action = fireCannon,
-         .autoActionAt = 1.0,
-         .decorate = drawCannon},
+         .cannon = true},
         {.name = "Pendulums: simple, chain, double, Newton's cradle",
          .contacts = true,
          .build =

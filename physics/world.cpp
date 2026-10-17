@@ -48,7 +48,7 @@ void World::removeBody(const RigidBody& body) {
 }
 
 std::optional<RayHit> World::raycast(const Vec3& origin, const Vec3& dir, Real maxDistance,
-                                     bool includeStatic) {
+                                     bool includeStatic) const {
     const Vec3 d = normalize(dir);
     std::optional<RayHit> best;
     for (auto& body : bodies_) {

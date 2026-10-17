@@ -1,12 +1,14 @@
 #pragma once
 
 #include "camera.h"
+#include "cannon.h"
 #include "interaction.h"
 #include "vehicle/car.h"
 #include "world.h"
 
 #include <array>
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -35,6 +37,10 @@ struct App {
     bool gravityOn = true;                ///< off in the zero-g scenes
     double accumulator = 0;
     bool showJoints = true;
+
+    std::optional<Cannon> cannon; ///< the scene's cannon, if it has one
+    /// The scene takes WASD and Space (a car or a cannon): P pauses instead.
+    bool sceneKeys() const { return car || cannon; }
 
     // The scene's car, if it has one, and the driver's input.
     std::unique_ptr<Car> car;
