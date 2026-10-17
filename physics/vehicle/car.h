@@ -41,7 +41,7 @@ struct CarSpec {
     // Shocks: from a tower on the chassis (shockTop above its centre, z = +-shockTopZ)
     // to the arm at z = +-shockArm. Tuned by the ride's natural frequency and
     // damping ratio; the rest length is chosen so the car stands level with the
-    // arms horizontal.
+    // arms horizontal, in Earth gravity.
     Real shockTop = 0.07;
     Real shockTopZ = 0.04;
     Real shockArm = 0.11;

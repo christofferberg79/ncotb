@@ -13,6 +13,9 @@
 
 namespace ncotb {
 
+constexpr Real kEarthGravity = 9.81; ///< m/s^2
+constexpr Real kMoonGravity = 1.62;  ///< m/s^2
+
 /// Owns the rigid bodies and advances them in time with fixed steps.
 ///
 /// As an OdeSystem the state is, per body, Baraff's 13 values (x, q, P, L).
@@ -22,7 +25,7 @@ class World : public OdeSystem {
 public:
     static constexpr int kStateSize = 13;
 
-    Vec3 gravity{0, -9.81, 0};
+    Vec3 gravity{0, -kEarthGravity, 0};
     IntegratorType integrator = IntegratorType::SemiImplicitEuler;
 
     RigidBody& addBody(const Shape& shape, Real mass);

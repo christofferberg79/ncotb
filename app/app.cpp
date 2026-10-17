@@ -44,6 +44,7 @@ void App::loadScene(int i) {
     world.solver.settings.iterations = scene.iterations > 0 ? scene.iterations : SolverSettings{}.iterations;
     showJoints = scene.showJoints;
     car.reset();
+    world.gravity = {0, -gravity, 0}; // the panel's strength; a scene may turn it off
     scene.build(world);
     if (scene.car) {
         // Stand it on whatever is below the start point.
@@ -60,7 +61,7 @@ void App::loadScene(int i) {
         throttle = steer = brake = 0;
         manualOrbit = 0;
     }
-    sceneGravity = world.gravity;
+    gravityOn = lengthSquared(world.gravity) > 0; // the scene may have turned it off
     world.detectCollisions();
     accumulator = 0;
     editIndex = -1;
@@ -239,10 +240,21 @@ void App::gui() {
     ImGui::SliderFloat("Time scale", &timeScale, 0.05f, 2.0f, "%.2f", ImGuiSliderFlags_Logarithmic);
     ImGui::SliderInt("Steps / s", &stepsPerSecond, 30, 1000);
     ImGui::Checkbox("Show omega (yellow) and L (magenta)", &showVectors);
-    bool gravityOn = lengthSquared(world.gravity) > 0;
-    if (ImGui::Checkbox("Gravity", &gravityOn))
-        world.gravity =
-            gravityOn ? (lengthSquared(sceneGravity) > 0 ? sceneGravity : Vec3{0, -9.81, 0}) : Vec3{};
+    bool gravityChanged = ImGui::Checkbox("Gravity", &gravityOn);
+    ImGui::SameLine();
+    if (ImGui::Button("Earth")) {
+        gravity = float(kEarthGravity);
+        gravityOn = gravityChanged = true;
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Moon")) {
+        gravity = float(kMoonGravity);
+        gravityOn = gravityChanged = true;
+    }
+    ImGui::BeginDisabled(!gravityOn);
+    gravityChanged |= ImGui::SliderFloat("g (m/s^2)", &gravity, 0, 30, "%.2f");
+    ImGui::EndDisabled();
+    if (gravityChanged) world.gravity = gravityOn ? Vec3{0, -gravity, 0} : Vec3{};
     ImGui::Checkbox("Show contacts", &showContacts);
     ImGui::SameLine();
     ImGui::Checkbox("Show joints", &showJoints);
@@ -462,6 +474,8 @@ bool App::loadSnapshot(const std::string& path) {
     for (int i : spawned)
         if (i >= 0 && i < int(world.bodies().size())) bodies.push_back(world.bodies()[size_t(i)].get());
     interaction.setSpawned(std::move(bodies));
+    gravityOn = lengthSquared(world.gravity) > 0; // the panel shows the snapshot's gravity
+    if (gravityOn) gravity = float(length(world.gravity));
     world.detectCollisions(); // for display
     energy0 = world.totalEnergy();
     accumulator = 0;
@@ -654,7 +668,7 @@ void App::drawScene() const {
             drawArrow(b->x, b->L * 0.3, MAGENTA);
         }
     }
-    if (const auto& decorate = scenes()[sceneIndex].decorate) decorate();
+    if (const auto& decorate = scenes()[sceneIndex].decorate) decorate(world);
     drawJoints(world, showJoints);
     if (car)
         for (int c = 0; c < 4; ++c)

@@ -115,7 +115,8 @@ void Car::shockTuning(int c, Real& stiffness, Real& damping, Real& restLength) c
     // level), by virtual work: per radian the lower arm turns, every force does
     // work f . (how far its point moves), and the shock must cancel the total.
     const CarSpec& s = spec_;
-    const Real g = length(world_->gravity) > 0 ? length(world_->gravity) : 9.81;
+    // Tuned for Earth, like a real truck: on the Moon it rides high and bouncy.
+    const Real g = kEarthGravity;
     const CornerGeometry geo = geometry(s, c);
 
     // Static wheel loads: the knuckles put a little more weight on the front.

@@ -31,7 +31,8 @@ struct App {
     OrbitCamera startView;                    ///< the scene's starting view, for "reset view" (C)
     static constexpr float kPanelWidth = 360; ///< control panel width (pixels)
     bool autoActionDone = false;
-    Vec3 sceneGravity{}; ///< the scene's own gravity, for the on/off switch
+    float gravity = float(kEarthGravity); ///< strength (m/s^2), kept across scenes
+    bool gravityOn = true;                ///< off in the zero-g scenes
     double accumulator = 0;
     bool showJoints = true;
 

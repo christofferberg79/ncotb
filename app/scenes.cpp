@@ -19,16 +19,17 @@ constexpr Vec3 kMuzzle{0.3, 1.05, 13.0};
 constexpr Vec3 kCannonTarget{0.3, 1.7, 0};
 constexpr Real kCannonSpeed = 25;
 
-Vec3 cannonVelocity() {
+/// g: the strength of gravity (the cannon aims for it; 0 fires straight).
+Vec3 cannonVelocity(Real g) {
     Vec3 d = kCannonTarget - kMuzzle;
     Real horizontal = std::hypot(d.x, d.z);
     Real t = horizontal / kCannonSpeed;
-    Real vy = (d.y + 0.5 * 9.81 * t * t) / t; // rise so gravity brings it down onto the target
+    Real vy = (d.y + 0.5 * g * t * t) / t; // rise so gravity brings it down onto the target
     return {d.x / t, vy, d.z / t};
 }
 
-void drawCannon() {
-    const Vec3 dir = normalize(cannonVelocity());
+void drawCannon(const World& w) {
+    const Vec3 dir = normalize(cannonVelocity(length(w.gravity)));
     const Vec3 breech = kMuzzle - dir * 2.4;
     const Color iron{45, 47, 52, 255}, wood{110, 70, 40, 255};
     DrawCylinderEx(toRl(breech), toRl(kMuzzle), 0.5f, 0.4f, 24, iron);
@@ -52,13 +53,12 @@ void fireCannon(World& w) {
     ball.friction = 0.4;
     ball.userData = packColor(40, 42, 48);
     ball.updateDerived();
-    ball.setLinearVelocity(cannonVelocity());
+    ball.setLinearVelocity(cannonVelocity(length(w.gravity)));
 }
 
 /// A wall in running bond: every other row is offset by half a brick, with half
 /// bricks at its ends.
 void buildBrickWall(World& w) {
-    w.gravity = {0, -9.81, 0};
     RigidBody& ground = w.addBody(Shape::plane(), 0);
     ground.friction = 0.8;
     ground.restitution = 0.1;
@@ -89,7 +89,6 @@ void buildBrickWall(World& w) {
 /// 80 x 80 m of hills: balls along a hillside, boxes tumbling down a slope and a
 /// stack of crates on the flattest spot near the middle.
 void buildTerrain(World& w) {
-    w.gravity = {0, -9.81, 0};
     auto hf = std::make_shared<const Heightfield>(Heightfield::hills(80, 1.0, 7.0, 22.0, 7));
     RigidBody& ground = w.addBody(Shape::heightfield(hf), 0);
     ground.friction = 0.7;
@@ -135,7 +134,6 @@ void buildTerrain(World& w) {
 /// Hills at the truck's scale (40 x 40 m, 0.5 m cells), flat around the start,
 /// with a jump ramp, a pyramid of small boxes and some balls.
 void buildTruckPark(World& w) {
-    w.gravity = {0, -9.81, 0};
     const Heightfield hills = Heightfield::hills(80, 0.5, 1.2, 8, 3);
     auto blend = [](Real d) { // 0 within 4 m of the start, 1 beyond 9 m, smooth between
         Real t = std::clamp((d - 4) / 5, Real(0), Real(1));
@@ -180,7 +178,6 @@ const std::vector<Scene>& scenes() {
          .contacts = true,
          .build =
              [](World& w) {
-                 w.gravity = {0, -9.81, 0};
                  w.addBody(Shape::plane(), 0).friction = 0.6;
                  // A tower of boxes.
                  for (int i = 0; i < 5; ++i)
@@ -248,7 +245,6 @@ const std::vector<Scene>& scenes() {
          }},
         {"Thrown boxes and balls", false,
          [](World& w) {
-             w.gravity = {0, -9.81, 0};
              for (int i = 0; i < 6; ++i) {
                  bool box = i % 2 == 0;
                  RigidBody& b = w.addBody(box ? Shape::box({0.4, 0.25, 0.15}) : Shape::sphere(0.3), 1.0);
@@ -283,7 +279,6 @@ const std::vector<Scene>& scenes() {
          }},
         {"Balls and boxes", true,
          [](World& w) {
-             w.gravity = {0, -9.81, 0};
              w.addBody(Shape::plane(), 0);
              RigidBody& block = w.addBody(Shape::box({1.5, 0.4, 1.0}), 0);
              block.x = {-1.5, 0.4, 0};
@@ -299,7 +294,6 @@ const std::vector<Scene>& scenes() {
          }},
         {"Box stack", true,
          [](World& w) {
-             w.gravity = {0, -9.81, 0};
              w.addBody(Shape::plane(), 0).restitution = 0;
              for (int i = 0; i < 6; ++i)
                  w.addBody(Shape::box({0.5, 0.5, 0.5}), 1, {-2, 0.5 + 1.0 * i, 0}).restitution = 0;
@@ -312,7 +306,6 @@ const std::vector<Scene>& scenes() {
          }},
         {"Friction ramp (mu = 0.2, 0.4, 0.6, 0.8)", true,
          [](World& w) {
-             w.gravity = {0, -9.81, 0};
              w.addBody(Shape::plane(), 0).friction = 0.5;
              // 25 degree ramp: tan 25 = 0.47, so the first two boxes slide.
              const Real theta = 25 * M_PI / 180;
@@ -351,7 +344,6 @@ const std::vector<Scene>& scenes() {
          .contacts = true,
          .build =
              [](World& w) {
-                 w.gravity = {0, -9.81, 0};
                  // Simple pendulum: a ball on a ball joint, released at 40 degrees.
                  const Vec3 p1{-4.5, 4, 0};
                  RigidBody& bob = w.addBody(Shape::sphere(0.2), 1,
@@ -396,7 +388,6 @@ const std::vector<Scene>& scenes() {
          .contacts = true,
          .build =
              [](World& w) {
-                 w.gravity = {0, -9.81, 0};
                  w.addBody(Shape::plane(), 0);
                  // Three masses dropped from the springs' rest length: no damping,
                  // light damping and critical damping (c = 2 sqrt(k m)).
@@ -428,7 +419,6 @@ const std::vector<Scene>& scenes() {
          .contacts = true,
          .build =
              [](World& w) {
-                 w.gravity = {0, -9.81, 0};
                  w.addBody(Shape::plane(), 0);
                  // Door: hinged on its left edge, opens up to 100 degrees either way.
                  RigidBody& door = w.addBody(Shape::box({0.45, 1.0, 0.03}), 15, {-3.05, 1.02, 0});
@@ -478,7 +468,6 @@ const std::vector<Scene>& scenes() {
              }},
         {"Restitution (e = 0, 0.25, 0.5, 0.75, 1)", true,
          [](World& w) {
-             w.gravity = {0, -9.81, 0};
              w.addBody(Shape::plane(), 0).restitution = 0;
              for (int i = 0; i < 5; ++i)
                  w.addBody(Shape::sphere(0.3), 1, {(i - 2) * 1.0, 2.3, 0}).restitution = 0.25 * i;

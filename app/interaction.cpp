@@ -18,7 +18,7 @@ Vec3 viewDirection(const Camera3D& c) { return normalize(toVec(c.target) - toVec
 
 Real weightOf(const World& world, const RigidBody& b) {
     Real g = length(world.gravity);
-    return b.mass() * (g > 0 ? g : 9.81); // in zero gravity, still scale by a normal weight
+    return b.mass() * (g > 0 ? g : kEarthGravity); // in zero gravity, still scale by a normal weight
 }
 
 } // namespace
