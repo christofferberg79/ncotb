@@ -376,6 +376,9 @@ void App::carGui() {
     slider("Motor torque (N m)", s.motorTorque, 0.05f, 2, "%.2f");
     slider("Top speed (m/s)", s.topSpeed, 2, 30, "%.0f");
     slider("Brake torque (N m)", s.brakeTorque, 0.05f, 4, "%.2f");
+    slider("Drag brake (N m)", s.dragBrake, 0, 1, "%.2f");
+    ImGui::SetItemTooltip("Braking while the throttle is at neutral, like an RC speed controller's\n"
+                          "drag brake (gears, bearings, motor). 0: coasts freely.");
     slider("Max steering (rad)", s.maxSteer, 0.1f, 0.6f, "%.2f");
 }
 

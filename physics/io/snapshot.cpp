@@ -569,6 +569,7 @@ struct SnapshotAccess {
                 {"topSpeed", &CarSpec::topSpeed},
                 {"coastDrag", &CarSpec::coastDrag},
                 {"brakeTorque", &CarSpec::brakeTorque},
+                {"dragBrake", &CarSpec::dragBrake},
                 {"maxSteer", &CarSpec::maxSteer},
                 {"steerRate", &CarSpec::steerRate},
                 {"steerTorque", &CarSpec::steerTorque}};
@@ -611,6 +612,7 @@ struct SnapshotAccess {
         in.expect("chassisHalfExtents");
         spec.chassisHalfExtents = in.vec3();
         for (auto [name, field] : specFields()) {
+            if (in.peek() != name) continue; // added since the snapshot was saved: keep the default
             in.expect(name);
             spec.*field = in.real();
         }

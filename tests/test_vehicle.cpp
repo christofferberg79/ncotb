@@ -21,7 +21,7 @@ struct CarWorld {
     explicit CarWorld(bool terrain = false, Vec3 start = {}, Real heading = 0) {
         w.gravity = {0, -kG, 0};
         w.substeps = 4;
-        w.solver.settings.iterations = 80; // the truck's joint loops need them (see docs/notes.md)
+        w.solver.settings.iterations = 60; // the truck's joint loops need them (see docs/notes.md)
         if (terrain) {
             auto hf = std::make_shared<const Heightfield>(Heightfield::hills(80, 0.5, 1.2, 8, 3));
             w.addBody(Shape::heightfield(hf), 0).friction = 0.8;
@@ -93,7 +93,7 @@ TEST_CASE("the car settles after a drop") {
         CAPTURE(sleeping);
         CarWorld t(false, {0, 0.3, 0});
         t.w.sleeping = sleeping;
-        t.run(sleeping ? 2 : 6);
+        t.run(sleeping ? 3 : 6);
         CHECK(length(t.car->chassis().v()) < 0.01);
         // Without sleeping a little is left (~0.007 rad/s, from the velocity
         // solve not quite converging), well below what puts it to sleep.

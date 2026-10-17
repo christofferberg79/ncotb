@@ -53,6 +53,10 @@ struct CarSpec {
     Real topSpeed = 6;       ///< m/s
     Real coastDrag = 0.0005; ///< N m s: the motors' drag when coasting
     Real brakeTorque = 1.6;  ///< N m per wheel
+    /// Braking while the throttle is at neutral (an RC speed controller's "drag
+    /// brake": gears, bearings and the motor). N m per wheel. Also damps the free
+    /// rolling the solver would leave, so a parked truck settles.
+    Real dragBrake = 0.3;
     // Steering servo.
     Real maxSteer = 0.45; ///< radians, at the centre line (Ackermann sets each wheel)
     Real steerRate = 6;   ///< rad/s, servo speed

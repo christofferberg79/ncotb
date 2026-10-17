@@ -608,10 +608,15 @@ don't need it (resting overlaps are within the slop, so there is no push-out to 
 
 **Two more things it took:**
 
-- *Iterations:* after a drop a tiny oscillation was left (0.007 rad/s, wheels spinning
-  0.2 rad/s), from the velocity solve not quite converging. That's above the sleep threshold
-  for the wheels, so the truck never fell asleep. With 80 iterations it's gone, and the truck
-  sleeps 1.7 s after a drop (0.46 ms per step while awake, almost nothing asleep).
+- *Iterations and a drag brake:* after a drop a tiny oscillation was left (0.007 rad/s, wheels
+  spinning 0.2 rad/s), from the velocity solve not quite converging. That's above the sleep
+  threshold for the wheels, so the truck never fell asleep. 80 iterations removed it. So does
+  a little rotation friction at the axles, which the truck lacked: apart from the motors' tiny
+  coast drag the wheels spun freely, and it coasted over 100 m from 4 m/s. `CarSpec::dragBrake`
+  (0.3 N m per wheel) brakes gently whenever the throttle is at neutral, like an RC speed
+  controller's drag brake, through the same implicit hinge motor as the brake. It coasts 7.7 m
+  now, settles at 60 iterations (asleep about 2 s after a drop), and costs 0.36 ms per step
+  while awake.
 - *A force mustn't keep a body awake:* the motors' tiny coast drag is a force, and forces woke
   bodies, which reset their "still for" timers every step. Now a force wakes only a sleeping
   body; an awake one keeps counting by its velocity.

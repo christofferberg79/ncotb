@@ -191,10 +191,12 @@ void Car::drive(Real throttle, Real steer, Real brake) {
     const Real maxSpin = s.topSpeed / s.wheelRadius;
     for (int c = 0; c < 4; ++c) {
         HingeJoint& axleJoint = *axleHinge_[c];
-        if (brake > 0) {
-            // Brake: hold the wheel's spin at zero relative to its holder, with
-            // limited torque (an implicit constraint, so it can't overshoot).
-            axleJoint.setMotor(0, brake * s.brakeTorque);
+        // Brake (and the drag brake when coasting): hold the wheel's spin at
+        // zero relative to its holder, with limited torque (an implicit
+        // constraint, so it can't overshoot).
+        const Real hold = std::max(brake * s.brakeTorque, throttle == 0 ? s.dragBrake : Real(0));
+        if (hold > 0) {
+            axleJoint.setMotor(0, hold);
             continue;
         }
         axleJoint.disableMotor();
