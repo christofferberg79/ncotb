@@ -72,6 +72,12 @@ if(NCOTB_SANITIZE)
   add_link_options(-fsanitize=address,undefined)
 endif()
 
+# Windows (LLVM-MinGW): link the C++ runtime (libc++, libunwind) statically, so the
+# executables run without the toolchain's DLLs on PATH. ASan needs its runtime DLL.
+if(MINGW AND NOT NCOTB_SANITIZE)
+  add_link_options(-static)
+endif()
+
 add_subdirectory(physics)
 add_subdirectory(app)
 

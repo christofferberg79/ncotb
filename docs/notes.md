@@ -514,7 +514,7 @@ the chassis and swings round behind it.
 
 ## Snapshots
 
-Cmd+S (or the panel's "Snapshots" section) writes the complete state to
+Cmd+S (Ctrl+S on Windows, or the panel's "Snapshots" section) writes the complete state to
 `snapshots/<date>-<time>-<scene>.snap`, and the panel loads one back, paused. For bug
 reports: a snapshot loaded into a headless test steps on exactly like the app did.
 

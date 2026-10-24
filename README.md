@@ -5,13 +5,52 @@ raylib + Dear ImGui. See [docs/notes.md](docs/notes.md) for design notes.
 
 ## Build & run
 
+Needs CMake ≥ 3.25, Ninja, a C++20 clang, and git (the first configure downloads raylib, imgui,
+rlImGui and doctest).
+
+### macOS
+
 ```sh
+xcode-select --install            # once: Apple clang, clang-format, clangd, lldb
 brew install cmake ninja          # once
-cmake --preset release            # first configure downloads raylib, imgui, rlImGui, doctest
+cmake --preset release
 cmake --build --preset release
 ctest --preset release            # unit tests + formatting check
 ./build/app/ncotb
 ```
+
+### Windows
+
+The toolchain is [LLVM-MinGW](https://github.com/mstorsjo/llvm-mingw): clang, libc++,
+clang-format, clangd and lldb in one package, so it works like the macOS setup. Install it once
+from PowerShell, then open a new terminal so PATH is updated:
+
+```powershell
+winget install -e --id MartinStorsjo.LLVM-MinGW.UCRT
+winget install -e --id Kitware.CMake
+winget install -e --id Ninja-build.Ninja
+```
+
+If winget hangs on "Extracting archive…", have it extract with `tar` instead of the (very slow)
+shell API: run `winget settings` and add
+`"installBehavior": { "archiveExtractionMethod": "tar" }`.
+
+Then, in PowerShell from the repository root:
+
+```powershell
+cmake --preset release
+cmake --build --preset release
+ctest --preset release            # unit tests + formatting check
+.\build\app\ncotb.exe
+```
+
+The executables link the C++ runtime statically, so `ncotb.exe` runs without the toolchain on
+PATH (except the `asan` preset's, which need the sanitizer runtime DLL from LLVM-MinGW's `bin`).
+Run it from the repository root, since snapshots are saved to `snapshots/` in the working
+directory. Visual Studio's MSVC isn't supported: the presets select `clang`/`clang++`, and the
+warning flags are GCC/clang style.
+
+### Presets
 
 Presets (`CMakePresets.json`):
 
@@ -25,7 +64,7 @@ Our code (physics, app, tests) builds with `-Wall -Wextra -Wpedantic -Wshadow -W
 warning fails the build (`-DNCOTB_WERROR=OFF` to relax that locally). `ctest` also runs a `format`
 test that fails if a file differs from `.clang-format` (fix with the "format all" task).
 
-Controls:
+Controls (on Windows, Option is Alt and Cmd is Ctrl):
 
 | Input | Action |
 |---|---|
@@ -66,9 +105,11 @@ In the RC truck scene:
 ### VS Code
 
 Recommended extensions: clangd, CodeLLDB, CMake Tools (see `.vscode/extensions.json`).
-⇧⌘B builds the debug preset; the Run and Debug panel has configs for the app and the tests
-(also filtered by test name, and under ASan/UBSan). clangd uses Apple's `/usr/bin/clangd`,
-formats on save with `.clang-format`, and shows the clang-tidy checks in `.clang-tidy`.
+⇧⌘B (Ctrl+Shift+B on Windows) builds the debug preset; the Run and Debug panel has configs for
+the app and the tests (also filtered by test name, and under ASan/UBSan). The tasks and launch
+configs have Windows variants (PowerShell commands, `.exe` paths). clangd is the one on PATH
+(Apple's `/usr/bin/clangd` on macOS, LLVM-MinGW's on Windows); it formats on save with
+`.clang-format` and shows the clang-tidy checks in `.clang-tidy`.
 
 ## Layout
 

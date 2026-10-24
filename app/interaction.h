@@ -13,7 +13,7 @@ namespace ncotb::app {
 ///
 ///   click-drag on a dynamic body   grab it (a soft spring to the cursor)
 ///   scroll while grabbing          move the grabbed point nearer / farther
-///   Option + click on a body       push it along the view ray
+///   Option (Alt) + click on a body push it along the view ray
 ///   1 / 2                          drop a box / ball above the point under the cursor
 ///   3                              throw a ball from the camera at the cursor
 ///   Backspace                      delete the body under the cursor

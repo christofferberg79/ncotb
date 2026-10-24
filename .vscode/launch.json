@@ -8,6 +8,7 @@
             "type": "lldb",
             "request": "launch",
             "program": "${workspaceFolder}/build/app/ncotb",
+            "windows": { "program": "${workspaceFolder}/build/app/ncotb.exe" },
             "cwd": "${workspaceFolder}",
             "preLaunchTask": "build (release)"
         },
@@ -16,6 +17,7 @@
             "type": "lldb",
             "request": "launch",
             "program": "${workspaceFolder}/build-debug/app/ncotb",
+            "windows": { "program": "${workspaceFolder}/build-debug/app/ncotb.exe" },
             "cwd": "${workspaceFolder}",
             "preLaunchTask": "build (debug)"
         },
@@ -24,6 +26,7 @@
             "type": "lldb",
             "request": "launch",
             "program": "${workspaceFolder}/build-debug/tests/physics_tests",
+            "windows": { "program": "${workspaceFolder}/build-debug/tests/physics_tests.exe" },
             "cwd": "${workspaceFolder}",
             "preLaunchTask": "build (debug)"
         },
@@ -32,6 +35,7 @@
             "type": "lldb",
             "request": "launch",
             "program": "${workspaceFolder}/build-debug/tests/physics_tests",
+            "windows": { "program": "${workspaceFolder}/build-debug/tests/physics_tests.exe" },
             "args": ["--test-case=${input:testCase}", "--break"],
             "cwd": "${workspaceFolder}",
             "preLaunchTask": "build (debug)"
@@ -42,6 +46,7 @@
             "type": "lldb",
             "request": "launch",
             "program": "${workspaceFolder}/build-asan/tests/physics_tests",
+            "windows": { "program": "${workspaceFolder}/build-asan/tests/physics_tests.exe" },
             "cwd": "${workspaceFolder}",
             "env": { "UBSAN_OPTIONS": "print_stacktrace=1" },
             "preLaunchTask": "build (asan)"
@@ -51,6 +56,7 @@
             "type": "lldb",
             "request": "launch",
             "program": "${workspaceFolder}/build-asan/app/ncotb",
+            "windows": { "program": "${workspaceFolder}/build-asan/app/ncotb.exe" },
             "cwd": "${workspaceFolder}",
             "env": { "UBSAN_OPTIONS": "print_stacktrace=1" },
             "preLaunchTask": "build (asan)"

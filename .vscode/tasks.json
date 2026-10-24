@@ -3,12 +3,21 @@
     // Microsoft C/C++ extension, which isn't installed (clangd is used instead).
     // All builds go through CMakePresets.json: debug -> build-debug/, release -> build/,
     // asan -> build-asan/. `cmake --preset X` is only run when the build dir is missing.
+    // The "windows" variants run in PowerShell, whatever the default terminal is.
     "version": "2.0.0",
+    "windows": {
+        "options": {
+            "shell": { "executable": "powershell.exe", "args": ["-NoProfile", "-Command"] }
+        }
+    },
     "tasks": [
         {
             "label": "build (debug)",
             "type": "shell",
             "command": "test -f build-debug/build.ninja || cmake --preset debug; cmake --build --preset debug",
+            "windows": {
+                "command": "if (-not (Test-Path build-debug/build.ninja)) { cmake --preset debug }; cmake --build --preset debug"
+            },
             "options": { "cwd": "${workspaceFolder}" },
             "group": { "kind": "build", "isDefault": true },
             "problemMatcher": {
@@ -24,6 +33,9 @@
             "label": "build (release)",
             "type": "shell",
             "command": "test -f build/build.ninja || cmake --preset release; cmake --build --preset release",
+            "windows": {
+                "command": "if (-not (Test-Path build/build.ninja)) { cmake --preset release }; cmake --build --preset release"
+            },
             "options": { "cwd": "${workspaceFolder}" },
             "group": "build",
             "problemMatcher": {
@@ -39,6 +51,9 @@
             "label": "build (asan)",
             "type": "shell",
             "command": "test -f build-asan/build.ninja || cmake --preset asan; cmake --build --preset asan",
+            "windows": {
+                "command": "if (-not (Test-Path build-asan/build.ninja)) { cmake --preset asan }; cmake --build --preset asan"
+            },
             "options": { "cwd": "${workspaceFolder}" },
             "group": "build",
             "problemMatcher": {
@@ -63,6 +78,7 @@
             "label": "run tests (asan)",
             "type": "shell",
             "command": "./build-asan/tests/physics_tests",
+            "windows": { "command": ".\\build-asan\\tests\\physics_tests.exe" },
             "options": { "cwd": "${workspaceFolder}" },
             "dependsOn": "build (asan)",
             "group": "test",
@@ -72,6 +88,7 @@
             "label": "run app (release)",
             "type": "shell",
             "command": "./build/app/ncotb",
+            "windows": { "command": ".\\build\\app\\ncotb.exe" },
             "options": { "cwd": "${workspaceFolder}" },
             "dependsOn": "build (release)",
             "problemMatcher": []
@@ -80,6 +97,7 @@
             "label": "format all",
             "type": "shell",
             "command": "xcrun clang-format -i $(git ls-files '*.h' '*.cpp')",
+            "windows": { "command": "clang-format -i $(git ls-files '*.h' '*.cpp')" },
             "options": { "cwd": "${workspaceFolder}" },
             "problemMatcher": []
         }

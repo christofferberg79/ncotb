@@ -1,7 +1,7 @@
 {
     // clangd (code completion, diagnostics, clang-tidy, formatting) instead of the
-    // Microsoft C/C++ IntelliSense. Apple's clangd matches Apple clang and finds the SDK.
-    "clangd.path": "/usr/bin/clangd",
+    // Microsoft C/C++ IntelliSense. clangd comes from PATH: on macOS Apple's /usr/bin/clangd
+    // (it matches Apple clang and finds the SDK), on Windows LLVM-MinGW's.
     "clangd.arguments": [
         "--compile-commands-dir=${workspaceFolder}/build-debug",
         "--clang-tidy",

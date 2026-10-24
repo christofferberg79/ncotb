@@ -1,6 +1,7 @@
 #include "interaction.h"
 
 #include "draw.h"
+#include "keys.h"
 
 #include <imgui.h>
 
@@ -152,7 +153,7 @@ void Interaction::draw(const World& world) const {
 
 void Interaction::gui(World& world) {
     if (!ImGui::CollapsingHeader("Interaction")) return;
-    ImGui::TextDisabled("drag a body: grab   Option+click: push");
+    ImGui::TextDisabled("drag a body: grab   " NCOTB_OPTION "+click: push");
     ImGui::TextDisabled("1/2: drop box/ball   3: throw   Backspace: delete");
     ImGui::SliderFloat("Grab stiffness (Hz)", &grabFrequency, 0.5f, 20, "%.1f", ImGuiSliderFlags_Logarithmic);
     ImGui::SliderFloat("Grab damping ratio", &grabDampingRatio, 0, 2);

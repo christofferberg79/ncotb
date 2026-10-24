@@ -1,6 +1,7 @@
 #include "scenes.h"
 
 #include "draw.h"
+#include "keys.h"
 
 #include <algorithm>
 #include <cmath>
@@ -131,7 +132,7 @@ void buildTruckPark(World& w) {
 
 const std::vector<Scene>& scenes() {
     static const std::vector<Scene> list = {
-        {.name = "Playground (drag, Option+click, 1/2/3, Backspace)",
+        {.name = "Playground (drag, " NCOTB_OPTION "+click, 1/2/3, Backspace)",
          .contacts = true,
          .build =
              [](World& w) {

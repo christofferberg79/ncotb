@@ -1,6 +1,7 @@
 #include "app.h"
 
 #include "draw.h"
+#include "keys.h"
 #include "scenes.h"
 
 #include <imgui.h>
@@ -90,9 +91,8 @@ void App::handleInput(bool mouseFree, bool keysFree, float dt) {
         driveInput(keysFree ? dt : 0);
         chase(dt);
     }
-    // Cmd+S saves a snapshot; with Cmd held the other keys are left alone.
-    const bool cmd = IsKeyDown(KEY_LEFT_SUPER) || IsKeyDown(KEY_RIGHT_SUPER);
-    if (cmd) {
+    // Cmd+S (Ctrl+S off macOS) saves a snapshot; with Cmd held the other keys are left alone.
+    if (cmdKeyDown()) {
         if (IsKeyPressed(KEY_S)) saveSnapshot();
         return;
     }
@@ -542,7 +542,7 @@ void App::listSnapshots() {
 
 void App::snapshotGui() {
     if (!ImGui::CollapsingHeader("Snapshots")) return;
-    if (ImGui::Button("Save (Cmd+S)")) saveSnapshot();
+    if (ImGui::Button("Save (" NCOTB_CMD "+S)")) saveSnapshot();
     ImGui::SameLine();
     if (ImGui::Button("Refresh list") || snapshotFiles.empty()) listSnapshots();
     if (!snapshotFiles.empty()) {
