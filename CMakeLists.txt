@@ -78,8 +78,29 @@ if(MINGW AND NOT NCOTB_SANITIZE)
   add_link_options(-static)
 endif()
 
+# Release packaging: `cpack --preset package` makes ncotb-<version>-macos-universal.dmg
+# (the signed ncotb.app) or ncotb-<version>-windows-x64.zip (ncotb.exe); see app/CMakeLists.txt.
+option(NCOTB_PACKAGE "Build the app for release packages (macOS bundle, Windows GUI exe)" OFF)
+set(NCOTB_VERSION "dev" CACHE STRING "Version shown in the packages' names and the macOS bundle")
+
 add_subdirectory(physics)
 add_subdirectory(app)
+
+if(NCOTB_PACKAGE)
+  set(CPACK_PACKAGE_NAME ncotb)
+  set(CPACK_PACKAGE_VERSION ${NCOTB_VERSION})
+  # Only app/'s install rules: the dependencies' (raylib's headers and library) aren't for users.
+  set(CPACK_INSTALL_CMAKE_PROJECTS "${PROJECT_BINARY_DIR}/app;ncotb;ALL;/")
+  if(APPLE)
+    set(CPACK_GENERATOR DragNDrop)
+    set(CPACK_PACKAGE_FILE_NAME ncotb-${NCOTB_VERSION}-macos-universal)
+  else()
+    set(CPACK_GENERATOR ZIP)
+    set(CPACK_PACKAGE_FILE_NAME ncotb-${NCOTB_VERSION}-windows-x64)
+    set(CPACK_INCLUDE_TOPLEVEL_DIRECTORY ON)
+  endif()
+  include(CPack)
+endif()
 
 enable_testing()
 add_subdirectory(tests)

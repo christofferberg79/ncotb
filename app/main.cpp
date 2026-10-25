@@ -7,10 +7,26 @@
 #include <rlImGui.h>
 
 #include <algorithm>
+#include <cstdlib>
+#include <cstring>
+#include <filesystem>
 
 using namespace ncotb::app;
 
 int main() {
+#ifdef __APPLE__
+    // Started from Finder, an app bundle's working directory is / (read-only), so put
+    // snapshots/ and imgui.ini in Application Support instead. Builds run from a
+    // terminal (not a bundle) keep the working directory.
+    if (std::strstr(GetApplicationDirectory(), ".app/Contents/MacOS")) {
+        if (const char* home = std::getenv("HOME")) {
+            std::error_code ec;
+            const auto dir = std::filesystem::path(home) / "Library/Application Support/ncotb";
+            std::filesystem::create_directories(dir, ec);
+            std::filesystem::current_path(dir, ec);
+        }
+    }
+#endif
     SetConfigFlags(FLAG_MSAA_4X_HINT | FLAG_WINDOW_RESIZABLE | FLAG_WINDOW_HIGHDPI | FLAG_VSYNC_HINT);
     InitWindow(1400, 900, "ncotb — rigid body simulation");
     SetTargetFPS(120);

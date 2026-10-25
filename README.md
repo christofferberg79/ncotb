@@ -3,6 +3,20 @@
 A from-scratch rebuild of the old `cids` project (Baraff's SIGGRAPH '97 notes), in C++20 with
 raylib + Dear ImGui. See [docs/notes.md](docs/notes.md) for design notes.
 
+## Download
+
+Ready-to-run builds are on the [Releases](https://github.com/christofferberg79/ncotb/releases)
+page; nothing else needs to be installed.
+
+- **macOS** (11 or later, Apple Silicon and Intel): open `ncotb-…-macos-universal.dmg` and drag
+  ncotb to Applications. The app isn't notarised by Apple, so the first launch is blocked: open
+  System Settings → Privacy & Security and click "Open Anyway" (or run
+  `xattr -dr com.apple.quarantine /Applications/ncotb.app`). Snapshots are saved to
+  `~/Library/Application Support/ncotb`.
+- **Windows** (10 or later, x64): unzip `ncotb-…-windows-x64.zip` and run `ncotb.exe`. If
+  SmartScreen says "Windows protected your PC", click "More info" → "Run anyway". Snapshots are
+  saved to `snapshots\` next to the exe.
+
 ## Build & run
 
 Needs CMake ≥ 3.25, Ninja, a C++20 clang, and git (the first configure downloads raylib, imgui,
@@ -59,6 +73,21 @@ Presets (`CMakePresets.json`):
 | `debug`   | `build-debug/` | debugging (VS Code launch configs, clangd) |
 | `release` | `build/`       | running at full speed (RelWithDebInfo) |
 | `asan`    | `build-asan/`  | Debug + AddressSanitizer/UBSan for our code |
+| `package` | `build-package/` | release packages: `cpack --preset package` after building |
+
+The `package` preset builds a universal (arm64 + x86_64) `ncotb.app`, ad-hoc signed, in a `.dmg`
+on macOS, and a `.zip` with a console-less `ncotb.exe` on Windows.
+
+### Releases (CI)
+
+`.github/workflows/build.yml` builds, tests and packages on macOS and Windows for every push to
+`main` and every pull request (the packages are attached to the run as artifacts). Pushing a
+version tag also publishes a GitHub release with both packages:
+
+```sh
+git tag v0.1.0
+git push origin v0.1.0
+```
 
 Our code (physics, app, tests) builds with `-Wall -Wextra -Wpedantic -Wshadow -Werror`, so a
 warning fails the build (`-DNCOTB_WERROR=OFF` to relax that locally). `ctest` also runs a `format`
