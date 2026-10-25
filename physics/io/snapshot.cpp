@@ -78,23 +78,20 @@ bool SnapshotReader::nextToken(std::string& token) {
     return true;
 }
 
-std::string SnapshotReader::peek() {
-    if (failed()) return "";
-    // Look ahead without consuming: remember the stream position.
-    auto at = in_.tellg();
-    int line = line_;
-    std::string text, keyword;
-    while (std::getline(in_, text)) {
-        auto t = tokenize(text);
-        if (!t.empty()) {
-            keyword = t[0];
-            break;
-        }
+/// Reads up to the next line with tokens into ahead_, unless it's there already.
+bool SnapshotReader::readAhead() {
+    for (std::string text; !hasAhead_ && std::getline(in_, text);) {
+        ++linesRead_;
+        ahead_ = tokenize(text);
+        hasAhead_ = !ahead_.empty();
+        aheadLine_ = linesRead_;
     }
-    in_.clear();
-    in_.seekg(at);
-    line_ = line;
-    return keyword;
+    return hasAhead_;
+}
+
+std::string SnapshotReader::peek() {
+    if (failed() || !readAhead()) return "";
+    return ahead_[0];
 }
 
 bool SnapshotReader::expect(const char* keyword) {
@@ -103,16 +100,14 @@ bool SnapshotReader::expect(const char* keyword) {
         fail("unexpected '" + tokens_[pos_] + "' after '" + tokens_[0] + "'");
         return false;
     }
-    std::string text;
-    tokens_.clear();
-    while (tokens_.empty()) {
-        if (!std::getline(in_, text)) {
-            fail(std::string("unexpected end, expected '") + keyword + "'");
-            return false;
-        }
-        ++line_;
-        tokens_ = tokenize(text);
+    if (!readAhead()) {
+        line_ = linesRead_;
+        fail(std::string("unexpected end, expected '") + keyword + "'");
+        return false;
     }
+    tokens_ = std::move(ahead_);
+    hasAhead_ = false;
+    line_ = aheadLine_;
     pos_ = 1;
     if (tokens_[0] != keyword) {
         fail("expected '" + std::string(keyword) + "', found '" + tokens_[0] + "'");

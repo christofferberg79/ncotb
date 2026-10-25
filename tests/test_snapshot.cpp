@@ -4,6 +4,8 @@
 #include "vehicle/car.h"
 
 #include <cmath>
+#include <filesystem>
+#include <fstream>
 #include <memory>
 #include <sstream>
 
@@ -131,4 +133,24 @@ TEST_CASE("broken snapshots are refused with the line of the problem") {
         CHECK_FALSE(ok);
         CHECK(reader.error().rfind("line ", 0) == 0);
     }
+}
+
+TEST_CASE("a snapshot file with CRLF line ends loads in text mode, as saved on Windows") {
+    Everything e;
+    e.run(60);
+    const std::string text = save(e.w, *e.car);
+    std::string crlf;
+    for (char c : text)
+        crlf += c == '\n' ? std::string("\r\n") : std::string(1, c);
+    const auto path = std::filesystem::temp_directory_path() / "ncotb-test-crlf.snap";
+    std::ofstream(path, std::ios::binary) << crlf;
+
+    World copy;
+    std::ifstream in(path); // text mode, like the app
+    SnapshotReader reader(in);
+    REQUIRE(loadWorld(copy, reader));
+    REQUIRE(loadCar(copy, reader));
+    CHECK(sameState(e.w, copy));
+    in.close();
+    std::filesystem::remove(path);
 }
