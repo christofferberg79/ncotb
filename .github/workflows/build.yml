@@ -60,6 +60,18 @@ jobs:
       - name: Test
         run: ctest --preset package
 
+      - name: Check that the app needs only system libraries
+        # Users have no toolchain: on Windows no libc++/libunwind/... DLLs (system
+        # DLLs aren't named lib*), on macOS only /System and /usr/lib.
+        run: |
+          if [[ "$RUNNER_OS" == Windows ]]; then
+            llvm-objdump -p build-package/app/ncotb.exe | grep "DLL Name" | tee dlls.txt
+            ! grep -i "DLL Name: lib" dlls.txt
+          else
+            otool -L build-package/app/ncotb.app/Contents/MacOS/ncotb | grep -E "^\s" | tee dylibs.txt
+            ! grep -vE "^\s+(/System/Library/|/usr/lib/)" dylibs.txt
+          fi
+
       - name: Package
         run: cpack --preset package
 
