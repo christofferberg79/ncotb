@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <cmath>
 #include <memory>
+#include <numbers>
 #include <utility>
 
 namespace ncotb::app {
@@ -32,6 +33,7 @@ struct TerrainMesh {
     Model model;
 };
 std::vector<TerrainMesh> terrainMeshes;
+std::vector<std::pair<const Heightfield*, TerrainColors>> terrainColors;
 
 /// Terrain colour: grass in the valleys, earth, rock on the heights and on steep
 /// slopes, snow on the tops.
@@ -59,6 +61,12 @@ Model buildTerrainModel(const Heightfield& hf) {
     };
     const Vec3 sun = normalize(Vec3{0.45, 1, 0.3});
     const Real range = std::max(hf.maxHeight() - hf.minHeight(), Real(1e-6));
+    auto own = std::find_if(terrainColors.begin(), terrainColors.end(),
+                            [&](const auto& c) { return c.first == &hf; });
+    auto color = [&](const Vec3& p, const Vec3& n) {
+        return own != terrainColors.end() ? own->second(p, n)
+                                          : terrainColor((p.y - hf.minHeight()) / range, 1 - n.y);
+    };
 
     const int cells = (nx - 1) * (nz - 1);
     Mesh mesh{};
@@ -71,7 +79,7 @@ Model buildTerrainModel(const Heightfield& hf) {
     auto add = [&](int i, int k) {
         Vec3 p = hf.vertex(i, k), n = vertexNormal(i, k);
         Real shade = 0.5 + 0.5 * std::max(dot(n, sun), Real(0));
-        Vec3 c = terrainColor((p.y - hf.minHeight()) / range, 1 - n.y) * shade;
+        Vec3 c = color(p, n) * shade;
         for (int a = 0; a < 3; ++a) {
             mesh.vertices[3 * v + a] = float(p[a]);
             mesh.normals[3 * v + a] = float(n[a]);
@@ -119,6 +127,38 @@ void releaseUnusedTerrainMeshes() {
         UnloadModel(t.model);
         return true;
     });
+}
+
+void setTerrainColors(const Heightfield* terrain, TerrainColors colors) {
+    std::erase_if(terrainColors, [&](const auto& c) { return c.first == terrain; });
+    terrainColors.emplace_back(terrain, std::move(colors));
+}
+
+void drawBoostPad(const BoostPad& pad, Real time) {
+    // Chevrons about half a metre apart, pointing along the pad; the glow
+    // runs forward at 1.6 waves a second.
+    const int n = std::max(1, int(std::lround(2 * pad.halfLength / 0.5)));
+    const Real spacing = 2 * pad.halfLength / n, depth = pad.halfWidth * 0.8, thick = spacing * 0.4;
+    const Vec3 d = pad.direction(), side{-d.z, 0, d.x};
+    const Vec3 start = pad.centre + Vec3{0, 0.025, 0} - d * pad.halfLength; // above the grid lines
+    auto at = [&](Real u, Real v) { return toRl(start + d * u + side * v); };
+    auto quad = [](::Vector3 a, ::Vector3 b, ::Vector3 c, ::Vector3 e, Color col) {
+        // Both windings, so it shows from either side.
+        DrawTriangle3D(a, b, c, col);
+        DrawTriangle3D(a, c, e, col);
+        DrawTriangle3D(a, c, b, col);
+        DrawTriangle3D(a, e, c, col);
+    };
+    for (int k = 0; k < n; ++k) {
+        const Real f = n > 1 ? Real(k) / (n - 1) : 0; // yellow to red
+        const Real glow =
+            0.65 + 0.35 * (0.5 + 0.5 * std::sin(2 * std::numbers::pi * (time * 1.6 - k * 0.18)));
+        const Color col{(unsigned char)(255 * glow), (unsigned char)((208 - 176 * f) * glow), 0, 255};
+        const Real u = k * spacing + (spacing - depth - thick) / 2; // the chevron's back corners
+        for (Real s : {-1.0, 1.0})
+            quad(at(u, s * pad.halfWidth), at(u + depth, 0), at(u + depth + thick, 0),
+                 at(u + thick, s * pad.halfWidth), col);
+    }
 }
 
 void drawOutline(const RigidBody& b, Color color) {

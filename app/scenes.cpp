@@ -128,6 +128,35 @@ void buildTruckPark(World& w) {
     }
 }
 
+// ---------------------------------------------------------------- RC truck track
+
+/// The track (track.h): dirt with jumps, banked turns, boost pads and a loop.
+/// Some boxes and balls in the infield, by the start.
+void buildTruckTrackScene(World& w) {
+    buildTruckTrack(w, packColor);
+    // Dirt on the track, grass elsewhere; steep faces darker, as if packed.
+    setTerrainColors(truckTrackTerrain().get(), [](const Vec3& p, const Vec3& n) {
+        const Vec3 grass{88, 138, 68}, dirt{152, 112, 72};
+        const Real f = truckTrackDirt(p.x, p.z);
+        const Real steep = std::clamp((1 - n.y) * 4, Real(0), Real(0.35));
+        // A little speckle, so the flat dirt doesn't look painted.
+        const Real speckle = 0.06 * std::sin(p.x * 12.9898 + p.z * 78.233) * std::sin(p.x * 3.1 - p.z * 5.7);
+        return (grass + (dirt - grass) * f) * (1 - steep * f + speckle);
+    });
+    const Real s = 0.05;
+    for (int row = 0; row < 3; ++row)
+        for (int i = 0; i < 3 - row; ++i) {
+            RigidBody& b =
+                w.addBody(Shape::box({s, s, s}), 0.05,
+                          {-15, s + row * 2 * s + 0.001 * row, -7 + (i - (2 - row) / 2.0) * 2.05 * s});
+            b.userData = packColor(220, 180, 60);
+        }
+    for (int i = 0; i < 5; ++i) {
+        RigidBody& ball = w.addBody(Shape::sphere(0.07), 0.08, {-13 + 0.4 * i, 0.07, -7.3});
+        ball.restitution = 0.6;
+    }
+}
+
 } // namespace
 
 const std::vector<Scene>& scenes() {
@@ -184,6 +213,18 @@ const std::vector<Scene>& scenes() {
          .iterations = 60, // the truck's joint loops; see docs/notes.md
          .showJoints = false,
          .car = true},
+        {.name = "RC truck track (WASD, Space brake)",
+         .contacts = true,
+         .build = buildTruckTrackScene,
+         .substeps = 4,
+         .camera = OrbitCamera{.yaw = -1.57f, .pitch = 0.32f, .distance = 2.2f, .target = {-18, 0.15f, -10}},
+         .showVectors = false,
+         .showContacts = false,
+         .iterations = 60,
+         .showJoints = false,
+         .car = true,
+         .carStart = {-18, 0, -track::laneZ},
+         .boostPads = truckTrackPads()},
         {"Intermediate axis (Dzhanibekov)", false,
          [](World& w) {
              w.gravity = {};

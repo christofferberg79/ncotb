@@ -184,11 +184,13 @@ void Car::flip() {
     place(chassis_->x - Vec3{0, spec_.wheelRadius + spec_.armDrop, 0} + Vec3{0, 0.3, 0}, heading);
 }
 
-void Car::drive(Real throttle, Real steer, Real brake) {
+void Car::drive(Real throttle, Real steer, Real brake, Real boost) {
     const CarSpec& s = spec_;
     throttle = std::clamp(throttle, Real(-1), Real(1));
     brake = std::clamp(brake, Real(0), Real(1));
-    const Real maxSpin = s.topSpeed / s.wheelRadius;
+    boost = std::clamp(boost, Real(0), Real(1));
+    const Real maxSpin = (s.topSpeed + boost * (s.boostSpeed - s.topSpeed)) / s.wheelRadius;
+    const Real motorTorque = s.motorTorque + boost * (s.boostTorque - s.motorTorque);
     for (int c = 0; c < 4; ++c) {
         HingeJoint& axleJoint = *axleHinge_[c];
         // Brake (and the drag brake when coasting): hold the wheel's spin at
@@ -206,7 +208,7 @@ void Car::drive(Real throttle, Real steer, Real brake) {
         Real torque = 0;
         if (throttle != 0) {
             const Real sense = throttle > 0 ? 1 : -1;
-            torque = s.motorTorque * throttle * std::clamp(1 - sense * spin / maxSpin, Real(0), Real(1));
+            torque = motorTorque * throttle * std::clamp(1 - sense * spin / maxSpin, Real(0), Real(1));
         }
         torque -= s.coastDrag * spin;
         const Vec3 n = axleJoint.axis();

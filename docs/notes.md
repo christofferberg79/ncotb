@@ -623,3 +623,45 @@ don't need it (resting overlaps are within the slop, so there is no push-out to 
 
 The joints open up to 3 mm (0.5 mm with Baumgarte) in 20 s of hard driving over hills, and
 close again right after. Older snapshots load with Baumgarte for joints, as they were saved.
+
+## The track and the loop
+
+`app/track.*` builds the "RC truck track" scene: one heightfield (0.2 m cells, fine enough for
+the jumps' lips) with the jumps and banked turns as height profiles, and the loop out of static
+boxes. It's physics only, so `tests/test_track.cpp` drives the truck over it.
+
+**Boost pads.** The truck's top speed (6 m/s) is right for driving round but too slow for the
+loop, so the motor gets a boost: `Car::drive(..., boost)` blends the motor towards
+`boostSpeed` (11 m/s) and `boostTorque`. A pad gives full throttle while on it and the boost for
+1.2 s after (`Booster`).
+
+**The loop took most of the work.** What it took, in order:
+
+- *A teardrop, not a circle.* At the speed a circle needs for its top (v² ≥ 5 g r at the
+  bottom), it presses the truck in at about 7 g, the suspension bottoms out (it has 43 mm of
+  travel; anything over 2 g does it) and half the energy went in the first quarter. The radius
+  of curvature now eases from 2.5 m at the bottom to 0.8 m at the top
+  (ρ = top + (entry − top)·c³, c = (1 + cos φ)/2): about 3 g. The top can't be tighter than
+  that: at 0.5 m the 0.4 m wheelbase spanned 72° of it.
+- *Many short planks.* Each seam between planks is a corner in the wheels' path, which costs a
+  fraction of about Δφ² of the kinetic energy once the suspension is bottomed out, so 4π²/n
+  round the loop: 33% with 120 planks. It has 240, of equal angle (short where it's tight).
+- *A sideways shift, at a constant rate.* The exit has to pass the entry (seen from the side
+  they cross), so the loop moves 2 m sideways. A truck rolling straight on a cylinder (any
+  cross-section swept along z) follows a geodesic, which unrolls to a straight line, so z must
+  grow linearly with arc length and the truck has to come in at that angle (about 13°). A
+  smoothstep shift (none at the bottom, most over the top) put the walls in its way.
+- *A guide rib, not walls.* The geodesic is unstable: the truck's yaw wanders off it over the
+  top, where the shift twists the lane most and the load is lightest. Walls knocked it across to
+  the other wall, or over; sloped kerbs and a half-pipe didn't hold it (it climbs them, or rolls
+  them at low speed). A slot car's answer works: a 7 cm rib down the middle that the truck
+  straddles, which pushes back on the inside of a wheel, front and rear alike, so it holds the
+  heading too. Kerbs and a flared mouth on the approach line the truck up for the rib.
+- *Broad phase.* Some thousand static boxes made the all-pairs loop slow; it now skips pairs of
+  static bodies without visiting them (same order, so the same results).
+
+**Limits.** The truck doesn't steer in the tests, and the loop is sensitive to how it comes in:
+lined up 13 m before it, it gets round with the heading 1.4° off or 25 cm to the side, but not
+with both, or with 3° (about half of the cases). A driver steering onto the second pad's arrows
+does better. The steering servo can't hold the front wheels against the seams' drag at 3 g
+(they splay to their limits); a 5 N m servo didn't change the outcome, so it stays at 2 N m.

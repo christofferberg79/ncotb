@@ -63,6 +63,7 @@ void App::loadScene(int i) {
         for (RigidBody* b : car->knuckles())
             b->userData = packColor(70, 160, 220);
         throttle = steer = brake = 0;
+        booster.reset();
         manualOrbit = 0;
     }
     gravityOn = lengthSquared(world.gravity) > 0; // the scene may have turned it off
@@ -176,7 +177,12 @@ void App::checkCar() {
 }
 
 void App::stepOnceNow(double h) {
-    if (car) car->drive(throttle, steer, brake);
+    if (car) {
+        // A boost pad boosts the motor, and on the pad gives full throttle (unless braking).
+        const auto& pads = scenes()[sceneIndex].boostPads;
+        const Real boost = pads.empty() ? 0 : booster.update(pads, car->chassis().x, car->forward(), h);
+        car->drive(booster.onPad() && brake == 0 ? 1 : throttle, steer, brake, boost);
+    }
     world.step(h);
     recordHistory();
     const Scene& scene = scenes()[sceneIndex];
@@ -347,6 +353,10 @@ void App::carGui() {
     ImGui::ProgressBar(float(std::abs(throttle)), {70, 0}, throttle < 0 ? "reverse" : "throttle");
     ImGui::SameLine();
     ImGui::ProgressBar(float(brake), {60, 0}, "brake");
+    if (booster.boost() > 0) {
+        ImGui::SameLine();
+        ImGui::TextColored({1.0f, 0.55f, 0.1f, 1.0f}, "BOOST");
+    }
     float steerShown = float(steer); // display only
     ImGui::SliderFloat("Steering", &steerShown, -1, 1, "%.2f", ImGuiSliderFlags_NoInput);
     // Front left, front right | rear left, rear right.
@@ -736,6 +746,8 @@ void App::drawScene() const {
         }
     }
     if (const auto& decorate = scenes()[sceneIndex].decorate) decorate(world);
+    for (const BoostPad& pad : scenes()[sceneIndex].boostPads)
+        drawBoostPad(pad, GetTime());
     if (cannon) cannon->draw(world);
     drawJoints(world, showJoints);
     if (car)

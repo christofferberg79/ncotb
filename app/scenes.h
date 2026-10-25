@@ -1,6 +1,7 @@
 #pragma once
 
 #include "camera.h"
+#include "track.h"
 #include "world.h"
 
 #include <functional>
@@ -33,7 +34,8 @@ struct Scene {
     bool car = false;
     Vec3 carStart{};
     Real carHeading = 0;
-    bool cannon = false; ///< an aimable cannon (WASD, F or Space to fire), see cannon.h
+    bool cannon = false;               ///< an aimable cannon (WASD, F or Space to fire), see cannon.h
+    std::vector<BoostPad> boostPads{}; ///< for the car (see track.h)
 };
 
 /// All scenes, in the order of the scene menu.

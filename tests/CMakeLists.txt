@@ -1,4 +1,6 @@
-add_executable(physics_tests test_main.cpp test_math.cpp test_rigid_body.cpp test_integrators.cpp test_collision.cpp test_contacts.cpp test_friction.cpp test_joints.cpp test_interaction.cpp test_terrain.cpp test_vehicle.cpp test_snapshot.cpp test_sleep.cpp)
+add_executable(physics_tests test_main.cpp test_math.cpp test_rigid_body.cpp test_integrators.cpp test_collision.cpp test_contacts.cpp test_friction.cpp test_joints.cpp test_interaction.cpp test_terrain.cpp test_vehicle.cpp test_snapshot.cpp test_sleep.cpp test_track.cpp
+  ${PROJECT_SOURCE_DIR}/app/track.cpp)
+target_include_directories(physics_tests PRIVATE ${PROJECT_SOURCE_DIR}/app)
 target_link_libraries(physics_tests PRIVATE physics doctest::doctest)
 ncotb_warnings(physics_tests)
 add_test(NAME physics_tests COMMAND physics_tests)

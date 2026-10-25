@@ -39,10 +39,10 @@ struct CarWorld {
         }
     }
     /// Steps with the given input; returns the largest joint error seen.
-    Real run(Real seconds, Real throttle = 0, Real steer = 0, Real brake = 0) {
+    Real run(Real seconds, Real throttle = 0, Real steer = 0, Real brake = 0, Real boost = 0) {
         Real worst = 0;
         for (int i = 0; i < int(std::lround(seconds / kH)); ++i) {
-            car->drive(throttle, steer, brake);
+            car->drive(throttle, steer, brake, boost);
             w.step(kH);
             worst = std::max(worst, car->jointError());
         }
@@ -117,6 +117,18 @@ TEST_CASE("full throttle: the car drives straight and approaches its top speed")
     CHECK(t.car->speed() < top * 1.01);
     CHECK(std::abs(t.car->heading() - heading0) < 1 * M_PI / 180);
     CHECK(std::abs(t.car->chassis().x.z) < 0.5); // little sideways drift over ~50 m
+}
+
+TEST_CASE("boost: full throttle approaches the boosted top speed") {
+    CarWorld t;
+    t.run(0.5);
+    t.run(6, 1, 0, 0, 1);
+    const CarSpec& s = t.car->spec();
+    const Real maxSpin = s.boostSpeed / s.wheelRadius;
+    const Real top = s.boostSpeed * s.boostTorque / (s.boostTorque + s.coastDrag * maxSpin);
+    CHECK(t.car->speed() > 0.95 * top);
+    CHECK(t.car->speed() < top * 1.01);
+    CHECK(t.car->chassis().R().column(1).y > 0.9); // still on its wheels
 }
 
 TEST_CASE("braking from 5 m/s stops the car in v^2 / 2a, a limited by the brakes or the tyres") {
