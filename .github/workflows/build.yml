@@ -1,0 +1,114 @@
+# Builds, tests and packages ncotb on macOS and Windows (the "package" preset).
+# Every run uploads the packages as workflow artifacts; a v* tag also publishes
+# them as a GitHub release.
+name: Build
+
+on:
+  # Every pushed branch (its checks also show on its pull request) and v* tags
+  push:
+    branches: ["**"]
+    tags: ["v*"]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # The Windows toolchain (README: Build & run → Windows), pinned
+  LLVM_MINGW_TAG: "20261020"
+  LLVM_MINGW: llvm-mingw-20261020-ucrt-x86_64
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Version
+        # v1.2.3 tag -> 1.2.3, otherwise dev-<commit>
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then v="${GITHUB_REF_NAME#v}"; else v="dev-${GITHUB_SHA::7}"; fi
+          echo "NCOTB_VERSION=$v" >> "$GITHUB_ENV"
+
+      - name: Install Ninja (macOS)
+        if: runner.os == 'macOS'
+        run: command -v ninja || brew install ninja
+
+      - name: Install LLVM-MinGW and Ninja (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          curl -fsSL -o llvm-mingw.zip "https://github.com/mstorsjo/llvm-mingw/releases/download/$LLVM_MINGW_TAG/$LLVM_MINGW.zip"
+          7z x -y -o"$RUNNER_TEMP" llvm-mingw.zip > /dev/null
+          rm llvm-mingw.zip
+          cygpath -w "$RUNNER_TEMP/$LLVM_MINGW/bin" >> "$GITHUB_PATH"
+          command -v ninja || choco install ninja -y --no-progress
+
+      - name: Configure
+        run: cmake --preset package -DNCOTB_VERSION="$NCOTB_VERSION"
+
+      - name: Build
+        run: cmake --build --preset package
+
+      - name: Test
+        run: ctest --preset package
+
+      - name: Check that the app needs only system libraries
+        # Users have no toolchain: on Windows no libc++/libunwind/... DLLs (system
+        # DLLs aren't named lib*), on macOS only /System and /usr/lib.
+        run: |
+          if [[ "$RUNNER_OS" == Windows ]]; then
+            llvm-objdump -p build-package/app/ncotb.exe | grep "DLL Name" | tee dlls.txt
+            ! grep -i "DLL Name: lib" dlls.txt
+          else
+            otool -L build-package/app/ncotb.app/Contents/MacOS/ncotb | grep -E "^\s" | tee dylibs.txt
+            ! grep -vE "^\s+(/System/Library/|/usr/lib/)" dylibs.txt
+          fi
+
+      - name: Package
+        run: cpack --preset package
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ncotb-${{ runner.os }}
+          path: |
+            build-package/ncotb-*.dmg
+            build-package/ncotb-*.zip
+          if-no-files-found: error
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cat > notes.md <<'EOF'
+          ## Download
+
+          - **macOS** (11 or later, Apple Silicon and Intel): `ncotb-*-macos-universal.dmg`. Open it and drag ncotb to Applications.
+            The app isn't notarised by Apple, so the first launch is blocked: open **System Settings → Privacy & Security** and click
+            **Open Anyway** (or run `xattr -dr com.apple.quarantine /Applications/ncotb.app`). Snapshots are saved to
+            `~/Library/Application Support/ncotb`.
+          - **Windows** (10 or later, x64): `ncotb-*-windows-x64.zip`. Unzip it and run `ncotb.exe`. If SmartScreen says
+            "Windows protected your PC", click **More info → Run anyway**. Snapshots are saved to `snapshots\` next to the exe.
+
+          EOF
+          gh release create "$GITHUB_REF_NAME" dist/* --repo "$GITHUB_REPOSITORY" --title "ncotb $GITHUB_REF_NAME" \
+            --notes-file notes.md --generate-notes

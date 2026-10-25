@@ -6,3 +6,4 @@ imgui.ini
 build-debug/
 build-asan/
 snapshots/
+build-package/

@@ -35,16 +35,34 @@
             "inherits": "base",
             "binaryDir": "${sourceDir}/build-asan",
             "cacheVariables": { "CMAKE_BUILD_TYPE": "Debug", "NCOTB_SANITIZE": "ON" }
+        },
+        {
+            "name": "package",
+            "displayName": "Release package",
+            "description": "Release build for distribution: universal macOS app bundle / Windows GUI exe (cpack --preset package)",
+            "inherits": "base",
+            "binaryDir": "${sourceDir}/build-package",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release",
+                "NCOTB_PACKAGE": "ON",
+                "CMAKE_OSX_ARCHITECTURES": "arm64;x86_64",
+                "CMAKE_OSX_DEPLOYMENT_TARGET": "11.0"
+            }
         }
     ],
     "buildPresets": [
         { "name": "debug", "configurePreset": "debug" },
         { "name": "release", "configurePreset": "release" },
-        { "name": "asan", "configurePreset": "asan" }
+        { "name": "asan", "configurePreset": "asan" },
+        { "name": "package", "configurePreset": "package" }
     ],
     "testPresets": [
         { "name": "debug", "configurePreset": "debug", "output": { "outputOnFailure": true } },
         { "name": "release", "configurePreset": "release", "output": { "outputOnFailure": true } },
-        { "name": "asan", "configurePreset": "asan", "output": { "outputOnFailure": true } }
+        { "name": "asan", "configurePreset": "asan", "output": { "outputOnFailure": true } },
+        { "name": "package", "configurePreset": "package", "output": { "outputOnFailure": true } }
+    ],
+    "packagePresets": [
+        { "name": "package", "configurePreset": "package" }
     ]
 }
