@@ -80,8 +80,8 @@ on macOS, and a `.zip` with a console-less `ncotb.exe` on Windows.
 
 ### Releases (CI)
 
-`.github/workflows/build.yml` builds, tests and packages on macOS and Windows for every push to
-`main` and every pull request (the packages are attached to the run as artifacts). Pushing a
+`.github/workflows/build.yml` builds, tests and packages on macOS and Windows for every pushed
+branch (the packages are attached to the run as artifacts). Pushing a
 version tag also publishes a GitHub release with both packages:
 
 ```sh

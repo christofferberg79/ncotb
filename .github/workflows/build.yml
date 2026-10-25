@@ -4,10 +4,10 @@
 name: Build
 
 on:
+  # Every pushed branch (its checks also show on its pull request) and v* tags
   push:
-    branches: [main]
+    branches: ["**"]
     tags: ["v*"]
-  pull_request:
   workflow_dispatch:
 
 concurrency:
