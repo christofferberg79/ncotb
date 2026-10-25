@@ -67,10 +67,18 @@ public:
 
 private:
     bool nextToken(std::string& token);
+    bool readAhead();
     std::istream& in_;
     std::vector<std::string> tokens_; ///< the rest of the current line
     size_t pos_ = 0;
     int line_ = 0;
+    /// The next line with tokens, once peek() has read it. Peeking reads ahead
+    /// rather than seeking back: tellg/seekg on a text-mode stream with CRLF
+    /// line ends lands in the wrong place on Windows (MinGW).
+    std::vector<std::string> ahead_;
+    bool hasAhead_ = false;
+    int linesRead_ = 0;
+    int aheadLine_ = 0;
     std::string error_;
 };
 
