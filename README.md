@@ -120,7 +120,15 @@ In the cannon scene:
 | F or Space | fire (a dashed arc shows where the ball will go) |
 | P | pause |
 
-In the RC truck scene:
+The "RC truck track" scene is an oval of dirt in a walled arena: whoops, a tabletop and a small
+double on the first straight, banked turns, and on the other straight a big double and a loop.
+Boost pads (the yellow-to-red arrows) give full throttle and a faster, stronger motor
+(`CarSpec::boostSpeed`, `boostTorque`) for 1.2 s after leaving them: enough to clear the big
+double and to get round the loop. The loop is entered at an angle (it shifts sideways so the exit
+clears the entry): line up with the second pad's arrows, and the kerbs and the yellow guide rib
+do the rest.
+
+In the RC truck scenes:
 
 | Input | Action |
 |---|---|
@@ -169,3 +177,4 @@ docs/      notes
 - [x] 6. Interaction: mouse picking/dragging, impulses, spawning
 - [x] 7. Heightfield terrain
 - [x] 8. Drivable vehicle: an RC monster truck with double-wishbone suspension
+- [x] 9. A track for it: jumps, banked turns, boost pads and a loop

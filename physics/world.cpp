@@ -216,46 +216,59 @@ void World::detectCollisions(Real h) {
     for (size_t i = 0; i < bodies_.size(); ++i)
         speed_[i] = h > 0 ? speedBound(*bodies_[i]) : 0;
     std::vector<ContactManifold>& ms = pairContacts_;
+    auto testPair = [&](size_t i, size_t j) {
+        RigidBody& a = *bodies_[i];
+        RigidBody& b = *bodies_[j];
+        // Static or asleep on both sides: their contacts are kept frozen (below).
+        if (!a.isAwake() && !b.isAwake()) return;
+        if (a.collisionGroup != 0 && a.collisionGroup == b.collisionGroup) return;
+        // How far the pair can close within the step, at most.
+        const Real margin = contactMargin + h * (speed_[i] + speed_[j]);
+        // Cheap rejection with bounding spheres before the exact test.
+        Real reach = a.shape().boundingRadius() + b.shape().boundingRadius() + margin;
+        if (lengthSquared(a.x - b.x) > reach * reach) return;
+        if (!joints_.empty() && joined(&a, &b)) return;
+        // Keep the dynamic body as a, so normals point away from static geometry.
+        RigidBody& dyn = a.isStatic() ? b : a;
+        RigidBody& other = a.isStatic() ? a : b;
+        ms.clear();
+        collide(dyn, other, ms, margin);
+        if (ms.empty()) return;
+        if (margin > contactMargin) {
+            // Fast enough to reach farther than contactMargin within the step.
+            Real gap = INFINITY;
+            for (const ContactManifold& m : ms)
+                for (int k = 0; k < m.count; ++k)
+                    gap = std::min(gap, -m.points[k].depth);
+            if (gap <= contactMargin) {
+                for (ContactManifold& m : ms)
+                    keepReachable(m, contactMargin, h); // already touching: keep what it closes on
+            } else {
+                speculate(dyn, other, ms, contactMargin, h, speed_[i] + speed_[j]);
+            }
+        }
+        for (const ContactManifold& m : ms) {
+            if (m.count == 0) continue;
+            contacts_.push_back(m);
+            // An awake body touching a sleeping one wakes it.
+            if (a.asleep) a.wake();
+            if (b.asleep) b.wake();
+        }
+    };
+    // Every pair with at least one body that moves, in index order. Pairs of
+    // static bodies (the many boxes of a track, say) are skipped without
+    // visiting them.
+    std::vector<size_t>& movable = movable_;
+    movable.clear();
+    for (size_t i = 0; i < bodies_.size(); ++i)
+        if (!bodies_[i]->isStatic()) movable.push_back(i);
     for (size_t i = 0; i < bodies_.size(); ++i) {
-        for (size_t j = i + 1; j < bodies_.size(); ++j) {
-            RigidBody& a = *bodies_[i];
-            RigidBody& b = *bodies_[j];
-            if (a.isStatic() && b.isStatic()) continue;
-            // Static or asleep on both sides: their contacts are kept frozen (below).
-            if (!a.isAwake() && !b.isAwake()) continue;
-            if (a.collisionGroup != 0 && a.collisionGroup == b.collisionGroup) continue;
-            // How far the pair can close within the step, at most.
-            const Real margin = contactMargin + h * (speed_[i] + speed_[j]);
-            // Cheap rejection with bounding spheres before the exact test.
-            Real reach = a.shape().boundingRadius() + b.shape().boundingRadius() + margin;
-            if (lengthSquared(a.x - b.x) > reach * reach) continue;
-            if (!joints_.empty() && joined(&a, &b)) continue;
-            // Keep the dynamic body as a, so normals point away from static geometry.
-            RigidBody& dyn = a.isStatic() ? b : a;
-            RigidBody& other = a.isStatic() ? a : b;
-            ms.clear();
-            collide(dyn, other, ms, margin);
-            if (ms.empty()) continue;
-            if (margin > contactMargin) {
-                // Fast enough to reach farther than contactMargin within the step.
-                Real gap = INFINITY;
-                for (const ContactManifold& m : ms)
-                    for (int k = 0; k < m.count; ++k)
-                        gap = std::min(gap, -m.points[k].depth);
-                if (gap <= contactMargin) {
-                    for (ContactManifold& m : ms)
-                        keepReachable(m, contactMargin, h); // already touching: keep what it closes on
-                } else {
-                    speculate(dyn, other, ms, contactMargin, h, speed_[i] + speed_[j]);
-                }
-            }
-            for (const ContactManifold& m : ms) {
-                if (m.count == 0) continue;
-                contacts_.push_back(m);
-                // An awake body touching a sleeping one wakes it.
-                if (a.asleep) a.wake();
-                if (b.asleep) b.wake();
-            }
+        if (!bodies_[i]->isStatic()) {
+            for (size_t j = i + 1; j < bodies_.size(); ++j)
+                testPair(i, j);
+        } else {
+            for (auto it = std::upper_bound(movable.begin(), movable.end(), i); it != movable.end(); ++it)
+                testPair(i, *it);
         }
     }
     // The solved contacts come first; then the frozen ones of sleeping bodies,

@@ -53,6 +53,9 @@ struct CarSpec {
     Real topSpeed = 6;       ///< m/s
     Real coastDrag = 0.0005; ///< N m s: the motors' drag when coasting
     Real brakeTorque = 1.6;  ///< N m per wheel
+    // Boost (from a boost pad on the track): a faster, stronger motor.
+    Real boostSpeed = 11; ///< m/s, top speed at full boost
+    Real boostTorque = 3; ///< N m per wheel at standstill, at full boost
     /// Braking while the throttle is at neutral (an RC speed controller's "drag
     /// brake": gears, bearings and the motor). N m per wheel. Also damps the free
     /// rolling the solver would leave, so a parked truck settles.
@@ -91,8 +94,9 @@ public:
     Car(World& world, const CarSpec& spec, const Vec3& position, Real heading, int collisionGroup = 77);
 
     /// Driver input for the next step: throttle in [-1, 1] (negative: reverse),
-    /// steer in [-1, 1] (positive: left), brake in [0, 1]. Call before each step.
-    void drive(Real throttle, Real steer, Real brake);
+    /// steer in [-1, 1] (positive: left), brake in [0, 1], boost in [0, 1]
+    /// (blends the motor towards boostSpeed and boostTorque). Call before each step.
+    void drive(Real throttle, Real steer, Real brake, Real boost = 0);
 
     /// Puts the car back on its wheels, standing at position (chassis centre
     /// height wheelRadius + armDrop above it), facing heading, at rest.

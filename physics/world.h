@@ -170,6 +170,7 @@ private:
     std::vector<CachedPoint> cache_;
     std::vector<Real> speed_;                   ///< per body, for the speculative margin
     std::vector<ContactManifold> pairContacts_; ///< scratch: the contacts of one pair
+    std::vector<size_t> movable_;               ///< scratch: indices of the bodies that aren't static
     Real lastSubstep_ = 0;
     Integrator generic_;
     Real time_ = 0;

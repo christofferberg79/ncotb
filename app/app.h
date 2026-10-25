@@ -3,6 +3,7 @@
 #include "camera.h"
 #include "cannon.h"
 #include "interaction.h"
+#include "track.h"
 #include "vehicle/car.h"
 #include "world.h"
 
@@ -47,6 +48,7 @@ struct App {
     // The scene's car, if it has one, and the driver's input.
     std::unique_ptr<Car> car;
     Real throttle = 0, steer = 0, brake = 0;
+    Booster booster; ///< the scene's boost pads' effect on the car
     bool chaseCamera = true;
     float manualOrbit = 0; ///< seconds left in which the chase camera leaves the yaw alone
 
