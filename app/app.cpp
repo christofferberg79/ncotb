@@ -89,6 +89,11 @@ void App::handleInput(bool mouseFree, bool keysFree, float dt) {
         manualOrbit = 2;
     orbit.update(mouseFree && !mouseTaken, keysFree, dt);
     if (car) {
+        // Driving resumes a paused truck (a snapshot loads paused); otherwise the
+        // panel shows throttle and steering but nothing moves.
+        if (paused && keysFree && !cmdKeyDown() &&
+            (IsKeyPressed(KEY_W) || IsKeyPressed(KEY_S) || IsKeyPressed(KEY_A) || IsKeyPressed(KEY_D)))
+            paused = false;
         driveInput(keysFree ? dt : 0);
         chase(dt);
     }
@@ -536,7 +541,7 @@ bool App::loadSnapshot(const std::string& path) {
     energy0 = world.totalEnergy();
     accumulator = 0;
     paused = true; // look at the moment first
-    snapshotStatus = "Loaded " + path + " (paused)";
+    snapshotStatus = "Loaded " + path + (car ? " (paused: P or drive to resume)" : " (paused)");
     return true;
 }
 
